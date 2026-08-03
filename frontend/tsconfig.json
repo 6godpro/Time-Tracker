@@ -18,5 +18,5 @@
     "baseUrl": ".",
     "paths": { "@/*": ["src/*"] }
   },
-  "include": ["src", "../backend/src/utils/mailer.ts"]
+  "include": ["src"]
 }
