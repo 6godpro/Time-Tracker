@@ -12,7 +12,7 @@ export function requireAdmin(req: Request, _res: Response, next: NextFunction) {
 
   prisma.user
     .findUnique({ where: { id: userId }, select: { role: true } })
-    .then((user: { role: string }) => {
+    .then((user) => {
       if (!user) {
         throw new AppError("User not found.", 404);
       }
