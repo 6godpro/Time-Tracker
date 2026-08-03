@@ -1,11 +1,12 @@
 import axios from "axios";
 import { getStoredToken, useAuthStore } from "@/store/authStore";
 
-
-const host = window.location.hostname
+const apiUrl = import.meta.env.VITE_API_URL;
+const apiPort = import.meta.env.VITE_API_PORT;
+const host = window.location.hostname;
 
 export const apiClient = axios.create({
-  baseURL: `http://${host}:${import.meta.env.VITE_API_PORT}`,
+  baseURL: apiUrl ?? `http://${host}:${apiPort}`,
   headers: { "Content-Type": "application/json" },
 });
 
