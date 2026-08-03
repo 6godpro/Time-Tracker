@@ -1,1 +1,1 @@
-export { GoogleAuthButton, isGoogleAuthConfigured } from "./GoogleAuthbutton";
+export { GoogleAuthButton, isGoogleAuthConfigured } from "./GoogleAuthButton";

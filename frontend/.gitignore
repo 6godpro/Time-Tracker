@@ -2,3 +2,5 @@ node_modules
 dist
 .env*
 src/routeTree.gen.ts
+tsconfig.tsbuildinfo
+.gitignore
