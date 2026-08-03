@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  EMPLOYEE
+  ADMIN
+}
+
+model User {
+  id        String   @id @default(uuid())
+  firstName String
+  lastName  String
+  email     String   @unique
+  password  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  role      UserRole @default(EMPLOYEE)
+  jobTitle  String
+
+  googleId String? @unique
+
+  passwordResetTokenHash      String?
+  passwordResetTokenExpiresAt DateTime?
+
+  emailVerified                   Boolean   @default(false)
+  emailVerificationTokenHash      String?
+  emailVerificationTokenExpiresAt DateTime?
+
+  shifts Shift[]
+
+  shiftEditRequestsSubmitted ShiftEditRequest[] @relation("ShiftEditRequestedBy")
+  shiftEditRequestsReviewed  ShiftEditRequest[] @relation("ShiftEditRequestReviewedBy")
+
+  @@map("users")
+}
+
+enum ShiftStatus {
+  WORKING
+  ON_BREAK
+  COMPLETED
+}
+
+model Shift {
+  id        String      @id @default(uuid())
+  userId    String
+  clockIn   DateTime    @default(now())
+  clockOut  DateTime?
+  status    ShiftStatus @default(WORKING)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  autoClosed  Boolean @default(false)
+  needsReview Boolean @default(false)
+
+  extendedCutoffAt DateTime?
+  extensionNote    String?
+  extendedAt       DateTime?
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  breaks       Break[]
+  editRequests ShiftEditRequest[]
+
+  @@index([userId])
+  @@map("shifts")
+}
+
+enum ShiftEditRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ShiftEditRequest {
+  id      String @id @default(uuid())
+  shiftId String
+  shift   Shift  @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  requestedByUserId String
+  requestedBy       User   @relation("ShiftEditRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Cascade)
+
+  proposedClockOut DateTime
+  reason           String
+
+  status ShiftEditRequestStatus @default(PENDING)
+
+  reviewedByUserId String?
+  reviewedBy       User?     @relation("ShiftEditRequestReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  reviewNote       String?
+  reviewedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shiftId])
+  @@index([status])
+  @@map("shift_edit_requests")
+}
+
+model Break {
+  id        String    @id @default(uuid())
+  shiftId   String
+  startTime DateTime  @default(now())
+  endTime   DateTime?
+
+  shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  @@index([shiftId])
+  @@map("breaks")
+}

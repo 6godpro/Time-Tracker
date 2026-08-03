@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-sans);
+  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+
+  --color-surface: #fafafa;
+  --color-card: #ffffff;
+  --color-ink: #18181b;
+  --color-ink-soft: #71717a;
+  --color-line: #e4e4e7;
+
+  --color-brand: #c2410c;
+  --color-brand-dark: #9a3412;
+
+  --color-status-idle: #a1a1aa;
+  --color-status-idle-bg: #f4f4f5;
+  --color-status-working: #16a34a;
+  --color-status-working-bg: #ecfdf3;
+  --color-status-break: #d97706;
+  --color-status-break-bg: #fffaeb;
+
+  --color-danger: #dc2626;
+  --color-danger-dark: #b91c1c;
+  --color-danger-bg: #fef2f2;
+  --color-danger-border: #fecaca;
+}
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --color-surface: #09090b;
+  --color-card: #18181b;
+  --color-ink: #fafafa;
+  --color-ink-soft: #a1a1aa;
+  --color-line: #27272a;
+
+  --color-brand: #fb923c;
+  --color-brand-dark: #fdba74;
+
+  --color-status-idle: #a1a1aa;
+  --color-status-idle-bg: #27272a;
+  --color-status-working: #4ade80;
+  --color-status-working-bg: #10291d;
+  --color-status-break: #fbbf24;
+  --color-status-break-bg: #2e2210;
+
+  --color-danger: #f87171;
+  --color-danger-dark: #fca5a5;
+  --color-danger-bg: #2a1316;
+  --color-danger-border: #7f2b2f;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono-tab {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes scale-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
