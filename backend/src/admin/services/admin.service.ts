@@ -5,11 +5,22 @@ import { fullName } from "../../utils/name";
 import {
   getAllShiftsForUser,
   getCompletedShiftsForUser,
+  getCompletedShiftsForUserInRange,
 } from "../../shift/services/shift.service";
 
 const editRequestInclude = {
-  requestedBy: { select: { id: true, firstName: true, lastName: true, email: true } },
-  shift: { select: { id: true, clockIn: true, clockOut: true, autoClosed: true, needsReview: true } },
+  requestedBy: {
+    select: { id: true, firstName: true, lastName: true, email: true },
+  },
+  shift: {
+    select: {
+      id: true,
+      clockIn: true,
+      clockOut: true,
+      autoClosed: true,
+      needsReview: true,
+    },
+  },
 };
 
 function serializeEditRequest(request: {
@@ -20,8 +31,19 @@ function serializeEditRequest(request: {
   reviewNote: string | null;
   reviewedAt: Date | null;
   createdAt: Date;
-  requestedBy: { id: string; firstName: string; lastName: string; email: string };
-  shift: { id: string; clockIn: Date; clockOut: Date | null; autoClosed: boolean; needsReview: boolean };
+  requestedBy: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  shift: {
+    id: string;
+    clockIn: Date;
+    clockOut: Date | null;
+    autoClosed: boolean;
+    needsReview: boolean;
+  };
 }) {
   return {
     id: request.id,
@@ -51,6 +73,7 @@ export async function listEmployees() {
       email: true,
       role: true,
       createdAt: true,
+      hourlyRateCents: true,
       _count: { select: { shifts: true } },
       shifts: {
         where: { status: { in: ["WORKING", "ON_BREAK"] } },
@@ -69,6 +92,7 @@ export async function listEmployees() {
     email: user.email,
     role: user.role,
     createdAt: user.createdAt,
+    hourlyRateCents: user.hourlyRateCents,
     totalShifts: user._count.shifts,
     currentStatus: user.shifts[0]?.status ?? "NOT_WORKING",
   }));
@@ -84,6 +108,7 @@ async function getEmployeeOrThrow(employeeId: string) {
       jobTitle: true,
       email: true,
       role: true,
+      hourlyRateCents: true,
     },
   });
 
@@ -92,6 +117,28 @@ async function getEmployeeOrThrow(employeeId: string) {
   }
 
   return { ...employee, fullName: fullName(employee) };
+}
+
+export async function updateEmployeeRate(
+  employeeId: string,
+  hourlyRateCents: number,
+) {
+  const employee = await prisma.user.findUnique({
+    where: { id: employeeId },
+    select: { id: true },
+  });
+
+  if (!employee) {
+    throw new AppError("Employee not found.", 404);
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: employeeId },
+    data: { hourlyRateCents },
+    select: { id: true, hourlyRateCents: true },
+  });
+
+  return updated;
 }
 
 export async function getEmployeeShifts(employeeId: string) {
@@ -171,10 +218,226 @@ export async function buildEmployeeShiftsWorkbook(employeeId: string): Promise<{
   return { employee, buffer };
 }
 
+function sumWorkedMs(shifts: { workedDurationMs: number }[]): number {
+  return shifts.reduce((total, shift) => total + shift.workedDurationMs, 0);
+}
+
+function grossPayCentsFor(workedMs: number, hourlyRateCents: number): number {
+  return Math.round((workedMs / 3_600_000) * hourlyRateCents);
+}
+
+export async function getEmployeePayroll(
+  employeeId: string,
+  from: Date,
+  to: Date,
+) {
+  const employee = await getEmployeeOrThrow(employeeId);
+  const shifts = await getCompletedShiftsForUserInRange(employeeId, from, to);
+  const workedDurationMs = sumWorkedMs(shifts);
+
+  return {
+    employee: {
+      id: employee.id,
+      fullName: employee.fullName,
+      email: employee.email,
+      hourlyRateCents: employee.hourlyRateCents,
+    },
+    from,
+    to,
+    shiftCount: shifts.length,
+    workedDurationMs,
+    grossPayCents: grossPayCentsFor(workedDurationMs, employee.hourlyRateCents),
+  };
+}
+
+type PayrollEmployee = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  hourlyRateCents: number;
+};
+
+export async function getPayrollForAllEmployees(from: Date, to: Date) {
+  const employees: PayrollEmployee[] = await prisma.user.findMany({
+    orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      hourlyRateCents: true,
+    },
+  });
+
+  const rows = await Promise.all(
+    employees.map(async (employee: PayrollEmployee) => {
+      const shifts = await getCompletedShiftsForUserInRange(
+        employee.id,
+        from,
+        to,
+      );
+      const workedDurationMs = sumWorkedMs(shifts);
+
+      return {
+        employee: {
+          id: employee.id,
+          fullName: fullName(employee),
+          email: employee.email,
+          hourlyRateCents: employee.hourlyRateCents,
+        },
+        shiftCount: shifts.length,
+        workedDurationMs,
+        grossPayCents: grossPayCentsFor(
+          workedDurationMs,
+          employee.hourlyRateCents,
+        ),
+      };
+    }),
+  );
+
+  return {
+    from,
+    to,
+    rows,
+    totalGrossPayCents: rows.reduce(
+      (total, row) => total + row.grossPayCents,
+      0,
+    ),
+  };
+}
+
+type PayrollPaymentRow = {
+  id: string;
+  periodFrom: Date;
+  periodTo: Date;
+  hourlyRateCents: number;
+  workedDurationMs: number;
+  grossPayCents: number;
+  paidAt: Date;
+  createdAt: Date;
+};
+
+function serializePayrollPayment(payment: PayrollPaymentRow) {
+  return {
+    id: payment.id,
+    periodFrom: payment.periodFrom,
+    periodTo: payment.periodTo,
+    hourlyRateCents: payment.hourlyRateCents,
+    workedDurationMs: payment.workedDurationMs,
+    grossPayCents: payment.grossPayCents,
+    paidAt: payment.paidAt,
+    createdAt: payment.createdAt,
+  };
+}
+
+export async function recordPayrollPayment(
+  employeeId: string,
+  from: Date,
+  to: Date,
+) {
+  const payroll = await getEmployeePayroll(employeeId, from, to);
+
+  const duplicate = await prisma.payrollPayment.findFirst({
+    where: { userId: employeeId, periodFrom: from, periodTo: to },
+  });
+
+  if (duplicate) {
+    throw new AppError(
+      "A payment for this exact period has already been recorded.",
+      409,
+    );
+  }
+
+  const payment = await prisma.payrollPayment.create({
+    data: {
+      userId: employeeId,
+      periodFrom: from,
+      periodTo: to,
+      hourlyRateCents: payroll.employee.hourlyRateCents,
+      workedDurationMs: payroll.workedDurationMs,
+      grossPayCents: payroll.grossPayCents,
+    },
+  });
+
+  return serializePayrollPayment(payment);
+}
+
+export async function listPayrollPayments(employeeId: string) {
+  await getEmployeeOrThrow(employeeId);
+
+  const payments = await prisma.payrollPayment.findMany({
+    where: { userId: employeeId },
+    orderBy: { periodTo: "desc" },
+  });
+
+  return payments.map(serializePayrollPayment);
+}
+
+export async function buildPayrollWorkbook(
+  from: Date,
+  to: Date,
+): Promise<ExcelJS.Buffer> {
+  const { rows } = await getPayrollForAllEmployees(from, to);
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "TimeTrack";
+  workbook.created = new Date();
+
+  const sheet = workbook.addWorksheet("Payroll", {
+    views: [{ state: "frozen", ySplit: 1 }],
+  });
+
+  sheet.columns = [
+    { header: "Employee", key: "employee", width: 26 },
+    { header: "Email", key: "email", width: 28 },
+    { header: "Hours Worked", key: "hours", width: 16 },
+    { header: "Hourly Rate", key: "rate", width: 14 },
+    { header: "Gross Pay", key: "grossPay", width: 14 },
+  ];
+
+  sheet.getRow(1).font = {
+    name: "Arial",
+    bold: true,
+    color: { argb: "FFFFFFFF" },
+  };
+  sheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF4F46E5" },
+  };
+  sheet.getRow(1).alignment = { vertical: "middle" };
+
+  for (const row of rows) {
+    sheet.addRow({
+      employee: row.employee.fullName,
+      email: row.employee.email,
+      hours: msToHours(row.workedDurationMs),
+      rate: row.employee.hourlyRateCents / 100,
+      grossPay: row.grossPayCents / 100,
+    });
+  }
+
+  sheet.getColumn("rate").numFmt = '"$"#,##0.00';
+  sheet.getColumn("grossPay").numFmt = '"$"#,##0.00';
+
+  sheet.eachRow((row) => {
+    row.font = { ...(row.font ?? {}), name: row.font?.name ?? "Arial" };
+  });
+
+  if (rows.length === 0) {
+    sheet.addRow({ employee: "No employees yet" });
+  }
+
+  return workbook.xlsx.writeBuffer();
+}
+
 // Defaults to PENDING-only when no status is given — that's the queue an
 // admin actually needs to act on day to day. Passing an explicit status
 // (including APPROVED/REJECTED) lets the UI show resolved history too.
-export async function listShiftEditRequests(status?: "PENDING" | "APPROVED" | "REJECTED") {
+export async function listShiftEditRequests(
+  status?: "PENDING" | "APPROVED" | "REJECTED",
+) {
   const requests = await prisma.shiftEditRequest.findMany({
     where: { status: status ?? "PENDING" },
     orderBy: { createdAt: "desc" },
@@ -190,7 +453,9 @@ export async function reviewShiftEditRequest(
   decision: "APPROVED" | "REJECTED",
   reviewNote?: string,
 ) {
-  const request = await prisma.shiftEditRequest.findUnique({ where: { id: requestId } });
+  const request = await prisma.shiftEditRequest.findUnique({
+    where: { id: requestId },
+  });
 
   if (!request) {
     throw new AppError("Edit request not found.", 404);
@@ -209,7 +474,12 @@ export async function reviewShiftEditRequest(
     await prisma.$transaction([
       prisma.shiftEditRequest.update({
         where: { id: requestId },
-        data: { status: "APPROVED", reviewedByUserId: reviewerId, reviewedAt: now, reviewNote },
+        data: {
+          status: "APPROVED",
+          reviewedByUserId: reviewerId,
+          reviewedAt: now,
+          reviewNote,
+        },
       }),
       prisma.shift.update({
         where: { id: request.shiftId },
@@ -222,7 +492,12 @@ export async function reviewShiftEditRequest(
     // submit another request.
     await prisma.shiftEditRequest.update({
       where: { id: requestId },
-      data: { status: "REJECTED", reviewedByUserId: reviewerId, reviewedAt: now, reviewNote },
+      data: {
+        status: "REJECTED",
+        reviewedByUserId: reviewerId,
+        reviewedAt: now,
+        reviewNote,
+      },
     });
   }
 

@@ -46,6 +46,7 @@ function toPublicUser(user: {
   role: string;
   emailVerified: boolean;
   createdAt: Date;
+  hourlyRateCents: number;
 }) {
   return {
     id: user.id,
@@ -57,6 +58,7 @@ function toPublicUser(user: {
     role: user.role,
     jobTitle: user.jobTitle,
     emailVerified: user.emailVerified,
+    hourlyRateCents: user.hourlyRateCents,
   };
 }
 

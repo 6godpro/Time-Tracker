@@ -215,6 +215,16 @@ export async function getShiftHistory(userId: string) {
   return getCompletedShiftsForUser(userId);
 }
 
+export async function getCompletedShiftsForUserInRange(userId: string, from: Date, to: Date) {
+  const shifts: shiftType[] = await prisma.shift.findMany({
+    where: { userId, status: "COMPLETED", clockIn: { gte: from, lte: to } },
+    include: shiftInclude,
+    orderBy: { clockIn: "desc" },
+  });
+
+  return shifts.map((shift) => serializeShift(shift));
+}
+
 export async function getAllShiftsForUser(userId: string) {
   const shifts: shiftType[] = await prisma.shift.findMany({
     where: { userId },
