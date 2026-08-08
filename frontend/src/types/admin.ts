@@ -10,8 +10,50 @@ export interface EmployeeSummary {
   email: string;
   role: Role;
   createdAt: string;
+  hourlyRateCents: number;
   totalShifts: number;
   currentStatus: ShiftStatus | "NOT_WORKING";
+}
+
+export interface PayrollEmployee {
+  id: string;
+  fullName: string;
+  email: string;
+  hourlyRateCents: number;
+}
+
+export interface EmployeePayroll {
+  employee: PayrollEmployee;
+  from: string;
+  to: string;
+  shiftCount: number;
+  workedDurationMs: number;
+  grossPayCents: number;
+}
+
+export interface PayrollRow {
+  employee: PayrollEmployee;
+  shiftCount: number;
+  workedDurationMs: number;
+  grossPayCents: number;
+}
+
+export interface PayrollSummary {
+  from: string;
+  to: string;
+  rows: PayrollRow[];
+  totalGrossPayCents: number;
+}
+
+export interface PayrollPayment {
+  id: string;
+  periodFrom: string;
+  periodTo: string;
+  hourlyRateCents: number;
+  workedDurationMs: number;
+  grossPayCents: number;
+  paidAt: string;
+  createdAt: string;
 }
 
 export interface EmployeeShiftsResponse {

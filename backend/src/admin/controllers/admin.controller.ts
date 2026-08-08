@@ -1,12 +1,23 @@
 import { Request, Response } from "express";
 import {
   buildEmployeeShiftsWorkbook,
+  buildPayrollWorkbook,
+  getEmployeePayroll,
   getEmployeeShifts,
+  getPayrollForAllEmployees,
   listEmployees,
+  listPayrollPayments,
   listShiftEditRequests,
+  recordPayrollPayment,
   reviewShiftEditRequest,
+  updateEmployeeRate,
 } from "../services/admin.service";
-import { listShiftEditRequestsQuerySchema, reviewShiftEditRequestSchema } from "../validators/admin.validator";
+import {
+  listShiftEditRequestsQuerySchema,
+  payrollRangeQuerySchema,
+  reviewShiftEditRequestSchema,
+  updateHourlyRateSchema,
+} from "../validators/admin.validator";
 
 export async function listEmployeesHandler(_req: Request, res: Response) {
   const employees = await listEmployees();
@@ -46,4 +57,47 @@ export async function reviewShiftEditRequestHandler(req: Request, res: Response)
     input.reviewNote,
   );
   res.status(200).json({ request });
+}
+
+export async function updateHourlyRateHandler(req: Request, res: Response) {
+  const input = updateHourlyRateSchema.parse(req.body);
+  const employee = await updateEmployeeRate(req.params.employeeId, input.hourlyRateCents);
+  res.status(200).json({ employee });
+}
+
+export async function employeePayrollHandler(req: Request, res: Response) {
+  const { from, to } = payrollRangeQuerySchema.parse(req.query);
+  const payroll = await getEmployeePayroll(req.params.employeeId, from, to);
+  res.status(200).json({ payroll });
+}
+
+export async function payrollHandler(req: Request, res: Response) {
+  const { from, to } = payrollRangeQuerySchema.parse(req.query);
+  const payroll = await getPayrollForAllEmployees(from, to);
+  res.status(200).json({ payroll });
+}
+
+export async function recordPayrollPaymentHandler(req: Request, res: Response) {
+  const { from, to } = payrollRangeQuerySchema.parse(req.body);
+  const payment = await recordPayrollPayment(req.params.employeeId, from, to);
+  res.status(201).json({ payment });
+}
+
+export async function listPayrollPaymentsHandler(req: Request, res: Response) {
+  const payments = await listPayrollPayments(req.params.employeeId);
+  res.status(200).json({ payments });
+}
+
+export async function exportPayrollHandler(req: Request, res: Response) {
+  const { from, to } = payrollRangeQuerySchema.parse(req.query);
+  const buffer = await buildPayrollWorkbook(from, to);
+
+  const filename = `payroll-${from.toISOString().slice(0, 10)}-to-${to.toISOString().slice(0, 10)}.xlsx`;
+
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send(buffer);
 }

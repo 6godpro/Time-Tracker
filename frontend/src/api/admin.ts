@@ -1,6 +1,22 @@
 import { apiClient } from "./client";
-import type { AdminShiftEditRequest, EmployeeShiftsResponse, EmployeeSummary } from "@/types/admin";
+import type {
+  AdminShiftEditRequest,
+  EmployeePayroll,
+  EmployeeShiftsResponse,
+  EmployeeSummary,
+  PayrollPayment,
+  PayrollSummary,
+} from "@/types/admin";
 import type { ShiftEditRequestStatus } from "@/types/shift";
+
+export interface PayrollDateRange {
+  from: string;
+  to: string;
+}
+
+function toRangeParams({ from, to }: PayrollDateRange) {
+  return { from, to: `${to}T23:59:59.999` };
+}
 
 export async function listEmployeesRequest(): Promise<EmployeeSummary[]> {
   const { data } = await apiClient.get<{ employees: EmployeeSummary[] }>("/admin/employees");
@@ -56,4 +72,68 @@ export async function reviewShiftEditRequestRequest(
     payload,
   );
   return data.request;
+}
+
+export async function updateEmployeeRateRequest(
+  employeeId: string,
+  hourlyRateCents: number,
+): Promise<{ id: string; hourlyRateCents: number }> {
+  const { data } = await apiClient.patch<{ employee: { id: string; hourlyRateCents: number } }>(
+    `/admin/employees/${employeeId}/rate`,
+    { hourlyRateCents },
+  );
+  return data.employee;
+}
+
+export async function employeePayrollRequest(
+  employeeId: string,
+  range: PayrollDateRange,
+): Promise<EmployeePayroll> {
+  const { data } = await apiClient.get<{ payroll: EmployeePayroll }>(
+    `/admin/employees/${employeeId}/payroll`,
+    { params: toRangeParams(range) },
+  );
+  return data.payroll;
+}
+
+export async function payrollRequest(range: PayrollDateRange): Promise<PayrollSummary> {
+  const { data } = await apiClient.get<{ payroll: PayrollSummary }>("/admin/payroll", {
+    params: toRangeParams(range),
+  });
+  return data.payroll;
+}
+
+export async function recordPayrollPaymentRequest(
+  employeeId: string,
+  range: PayrollDateRange,
+): Promise<PayrollPayment> {
+  const { data } = await apiClient.post<{ payment: PayrollPayment }>(
+    `/admin/employees/${employeeId}/payroll/payments`,
+    toRangeParams(range),
+  );
+  return data.payment;
+}
+
+export async function payrollPaymentsRequest(employeeId: string): Promise<PayrollPayment[]> {
+  const { data } = await apiClient.get<{ payments: PayrollPayment[] }>(
+    `/admin/employees/${employeeId}/payroll/payments`,
+  );
+  return data.payments;
+}
+
+export async function exportPayroll(range: PayrollDateRange): Promise<void> {
+  const response = await apiClient.get("/admin/payroll/export", {
+    params: toRangeParams(range),
+    responseType: "blob",
+  });
+
+  const filename = `payroll-${range.from}-to-${range.to}.xlsx`;
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
