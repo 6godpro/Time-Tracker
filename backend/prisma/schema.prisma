@@ -22,6 +22,7 @@ model User {
   updatedAt DateTime @updatedAt
   role      UserRole @default(EMPLOYEE)
   jobTitle  String
+  hourlyRateCents Int @default(0)
 
   googleId String? @unique
 
@@ -33,6 +34,7 @@ model User {
   emailVerificationTokenExpiresAt DateTime?
 
   shifts Shift[]
+  payrollPayments PayrollPayment[]
 
   shiftEditRequestsSubmitted ShiftEditRequest[] @relation("ShiftEditRequestedBy")
   shiftEditRequestsReviewed  ShiftEditRequest[] @relation("ShiftEditRequestReviewedBy")
@@ -112,4 +114,23 @@ model Break {
 
   @@index([shiftId])
   @@map("breaks")
+}
+
+model PayrollPayment {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  periodFrom DateTime
+  periodTo   DateTime
+
+  hourlyRateCents  Int
+  workedDurationMs Float
+  grossPayCents    Int
+
+  paidAt    DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("payroll_payments")
 }
