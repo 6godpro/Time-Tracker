@@ -6,6 +6,8 @@ import authRoutes from "./auth/routes/auth.routes";
 import shiftRoutes from "./shift/routes/shift.routes";
 import breakRoutes from "./break/routes/break.routes";
 import adminRoutes from "./admin/routes/admin.routes";
+import notificationRoutes from "./notification/routes/notification.routes";
+import payrollRoutes from "./payroll/routes/payroll.routes";
 
 export const app = express();
 
@@ -20,6 +22,8 @@ app.use("/auth", authRoutes);
 app.use("/shift", shiftRoutes);
 app.use("/break", breakRoutes);
 app.use("/admin", adminRoutes);
+app.use("/notification", notificationRoutes);
+app.use("/payroll", payrollRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
