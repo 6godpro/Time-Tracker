@@ -79,7 +79,7 @@ export function Profile() {
           </span>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-4 border-t border-line pt-6 sm:grid-cols-2">
+        <div className="mt-6 flex flex-col sm:flex-row justify-around gap-4 border-t border-line pt-6">
           <div>
             <p className="text-xs uppercase tracking-wide text-ink-soft">
               Email
@@ -94,6 +94,14 @@ export function Profile() {
             </p>
             <p className="mt-1 text-sm font-medium text-ink">
               {formatMemberSince(user.createdAt)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-ink-soft">
+              Current Rate
+            </p>
+            <p className="mt-1 text-sm font-medium text-ink">
+              {`$ ${(user.hourlyRateCents/100).toFixed(2)}/hour`}
             </p>
           </div>
         </div>
