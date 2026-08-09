@@ -29,6 +29,7 @@ export interface EmployeePayroll {
   shiftCount: number;
   workedDurationMs: number;
   grossPayCents: number;
+  unresolvedShiftCount: number;
 }
 
 export interface PayrollRow {

@@ -184,6 +184,8 @@ function PayrollCard({ employeeId }: { employeeId: string }) {
     recordPayment.variables?.range.from === from &&
     recordPayment.variables?.range.to === to;
 
+  const hasUnresolvedShifts = !!payroll && payroll.unresolvedShiftCount > 0;
+
   return (
     <Card className="mb-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -243,11 +245,23 @@ function PayrollCard({ employeeId }: { employeeId: string }) {
             </div>
           </div>
 
+          {hasUnresolvedShifts ? (
+            <p className="mt-4 rounded-lg bg-status-break-bg px-3 py-2 text-xs text-status-break">
+              {payroll.unresolvedShiftCount} shift
+              {payroll.unresolvedShiftCount === 1 ? "" : "s"} in this period{" "}
+              {payroll.unresolvedShiftCount === 1 ? "is" : "are"} still awaiting
+              a correction request review. Resolve{" "}
+              {payroll.unresolvedShiftCount === 1 ? "it" : "them"} under Pending
+              Shift Corrections before recording this payment.
+            </p>
+          ) : null}
+
           <div className="mt-4 flex items-center gap-3">
             <Button
               variant="primary"
               className="px-3! py-1.5! text-xs"
               isLoading={recordPayment.isPending}
+              disabled={alreadyRecordedForRange || hasUnresolvedShifts}
               onClick={() =>
                 recordPayment.mutate({ employeeId, range: { from, to } })
               }

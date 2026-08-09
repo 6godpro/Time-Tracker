@@ -247,6 +247,9 @@ export async function getEmployeePayroll(
   const employee = await getEmployeeOrThrow(employeeId);
   const shifts = await getCompletedShiftsForUserInRange(employeeId, from, to);
   const workedDurationMs = sumWorkedMs(shifts);
+  const unresolvedShiftCount = shifts.filter(
+    (shift) => shift.needsReview,
+  ).length;
 
   return {
     employee: {
@@ -260,6 +263,7 @@ export async function getEmployeePayroll(
     shiftCount: shifts.length,
     workedDurationMs,
     grossPayCents: grossPayCentsFor(workedDurationMs, employee.hourlyRateCents),
+    unresolvedShiftCount,
   };
 }
 
@@ -354,6 +358,13 @@ export async function recordPayrollPayment(
   const duplicate = await prisma.payrollPayment.findFirst({
     where: { userId: employeeId, periodFrom: from, periodTo: to },
   });
+
+  if (payroll.unresolvedShiftCount > 0) {
+    throw new AppError(
+      `This period includes ${payroll.unresolvedShiftCount} shift${payroll.unresolvedShiftCount === 1 ? "" : "s"} still awaiting a correction request review. Resolve ${payroll.unresolvedShiftCount === 1 ? "it" : "them"} before recording this payment.`,
+      409,
+    );
+  }
 
   if (duplicate) {
     throw new AppError(
