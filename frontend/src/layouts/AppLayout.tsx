@@ -3,6 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { useAuthStore } from "@/store/authStore";
 import { ProfileMenu } from "@/components/ProfileMenu";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard" },
@@ -42,11 +43,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
               ))}
             </nav>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-3">
-              <ThemeToggle />
-              <ProfileMenu />
-            </div>
+          <div className="flex items-center justify-between gap-3">
+            <NotificationBell />
+            <ProfileMenu />
+            <ThemeToggle />
           </div>
         </div>
         <nav className="flex gap-1 border-t border-line px-4 py-2 sm:hidden">
