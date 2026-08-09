@@ -1,7 +1,9 @@
 import { prisma } from "@/config/prisma";
+import { createShiftEditRequestSubmittedNotification } from "@/notification/services/notification.service";
 import { AppError } from "@/utils/AppError";
+import { fullName } from "@/utils/name";
 
-export const MAX_SHIFT_DURATION_MS = 8.5 * 60 * 60 * 1000;
+export const MAX_SHIFT_DURATION_MS = 8 * 60 * 60 * 1000;
 export const EXTEND_WINDOW_START_MS = 8 * 60 * 60 * 1000;
 export const EXTENSION_DURATION_MS = 2 * 60 * 60 * 1000;
 
@@ -215,7 +217,11 @@ export async function getShiftHistory(userId: string) {
   return getCompletedShiftsForUser(userId);
 }
 
-export async function getCompletedShiftsForUserInRange(userId: string, from: Date, to: Date) {
+export async function getCompletedShiftsForUserInRange(
+  userId: string,
+  from: Date,
+  to: Date,
+) {
   const shifts: shiftType[] = await prisma.shift.findMany({
     where: { userId, status: "COMPLETED", clockIn: { gte: from, lte: to } },
     include: shiftInclude,
@@ -328,10 +334,7 @@ export async function createShiftEditRequest(
   }
 
   if (proposedClockOut.getTime() <= shift.clockIn.getTime()) {
-    throw new AppError(
-      "Proposed clock-out must be after this shift's clock-in.",
-      400,
-    );
+    throw new AppError("Proposed clock-out must be after this shift's clock-in.", 400);
   }
 
   if (proposedClockOut.getTime() > Date.now()) {
@@ -343,15 +346,19 @@ export async function createShiftEditRequest(
   });
 
   if (existingPending) {
-    throw new AppError(
-      "You already have a pending edit request for this shift.",
-      409,
-    );
+    throw new AppError("You already have a pending edit request for this shift.", 409);
   }
 
-  await prisma.shiftEditRequest.create({
+  const requester = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { firstName: true, lastName: true },
+  });
+
+  const created = await prisma.shiftEditRequest.create({
     data: { shiftId, requestedByUserId: userId, proposedClockOut, reason },
   });
+
+  await createShiftEditRequestSubmittedNotification(fullName(requester), shift.clockIn, created.id);
 
   const updated = await prisma.shift.findUniqueOrThrow({
     where: { id: shiftId },
