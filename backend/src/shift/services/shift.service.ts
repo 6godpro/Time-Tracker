@@ -61,7 +61,7 @@ function serializeShift(shift: shiftType, now: Date = new Date()) {
   const breakMs = sumBreakMs(shift.breaks, now);
   const shiftEnd = shift.clockOut ?? now;
   const totalMs = shiftEnd.getTime() - shift.clockIn.getTime();
-  const workedMs = Math.max(totalMs - breakMs, 0);
+  const workedMs = Math.max(totalMs, 0);
 
   const activeBreak = shift.breaks.find((brk) => brk.endTime === null) ?? null;
 
@@ -98,20 +98,22 @@ async function autoCloseIfExpired(shift: shiftType): Promise<boolean> {
     return false;
   }
 
-  await prisma.break.updateMany({
-    where: { shiftId: shift.id, endTime: null },
-    data: { endTime: cutoff },
-  });
+  await prisma.$transaction([
+    prisma.break.updateMany({
+      where: { shiftId: shift.id, endTime: null },
+      data: { endTime: cutoff },
+    }),
 
-  await prisma.shift.update({
-    where: { id: shift.id },
-    data: {
-      status: "COMPLETED",
-      clockOut: cutoff,
-      autoClosed: true,
-      needsReview: true,
-    },
-  });
+    prisma.shift.update({
+      where: { id: shift.id },
+      data: {
+        status: "COMPLETED",
+        clockOut: cutoff,
+        autoClosed: true,
+        needsReview: true,
+      },
+    }),
+  ]);
 
   return true;
 }
@@ -132,6 +134,8 @@ async function findActiveShift(userId: string): Promise<shiftType | null> {
 }
 
 export async function getUnresolvedAutoClosedShifts(userId: string) {
+  await findActiveShift(userId);
+
   const shifts: shiftType[] = await prisma.shift.findMany({
     where: { userId, autoClosed: true, editRequests: { none: {} } },
     include: shiftInclude,
@@ -334,7 +338,10 @@ export async function createShiftEditRequest(
   }
 
   if (proposedClockOut.getTime() <= shift.clockIn.getTime()) {
-    throw new AppError("Proposed clock-out must be after this shift's clock-in.", 400);
+    throw new AppError(
+      "Proposed clock-out must be after this shift's clock-in.",
+      400,
+    );
   }
 
   if (proposedClockOut.getTime() > Date.now()) {
@@ -346,7 +353,10 @@ export async function createShiftEditRequest(
   });
 
   if (existingPending) {
-    throw new AppError("You already have a pending edit request for this shift.", 409);
+    throw new AppError(
+      "You already have a pending edit request for this shift.",
+      409,
+    );
   }
 
   const requester = await prisma.user.findUniqueOrThrow({
@@ -358,7 +368,11 @@ export async function createShiftEditRequest(
     data: { shiftId, requestedByUserId: userId, proposedClockOut, reason },
   });
 
-  await createShiftEditRequestSubmittedNotification(fullName(requester), shift.clockIn, created.id);
+  await createShiftEditRequestSubmittedNotification(
+    fullName(requester),
+    shift.clockIn,
+    created.id,
+  );
 
   const updated = await prisma.shift.findUniqueOrThrow({
     where: { id: shiftId },
