@@ -249,10 +249,12 @@ function PayrollCard({ employeeId }: { employeeId: string }) {
             <p className="mt-4 rounded-lg bg-status-break-bg px-3 py-2 text-xs text-status-break">
               {payroll.unresolvedShiftCount} shift
               {payroll.unresolvedShiftCount === 1 ? "" : "s"} in this period{" "}
-              {payroll.unresolvedShiftCount === 1 ? "is" : "are"} still awaiting
-              a correction request review. Resolve{" "}
-              {payroll.unresolvedShiftCount === 1 ? "it" : "them"} under Pending
-              Shift Corrections before recording this payment.
+              {payroll.unresolvedShiftCount === 1 ? "is" : "are"} auto-closed
+              and still need
+              {payroll.unresolvedShiftCount === 1 ? "s" : ""} review before this
+              payment can be recorded. Check Pending Shift Corrections to
+              approve a pending request, or ask {payroll.employee.fullName} to
+              submit one.
             </p>
           ) : null}
 
