@@ -35,6 +35,7 @@ model User {
 
   shifts Shift[]
   payrollPayments PayrollPayment[]
+  notifications   Notification[]
 
   shiftEditRequestsSubmitted ShiftEditRequest[] @relation("ShiftEditRequestedBy")
   shiftEditRequestsReviewed  ShiftEditRequest[] @relation("ShiftEditRequestReviewedBy")
@@ -99,6 +100,8 @@ model ShiftEditRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  notifications Notification[]
+
   @@index([shiftId])
   @@index([status])
   @@map("shift_edit_requests")
@@ -131,6 +134,38 @@ model PayrollPayment {
   paidAt    DateTime @default(now())
   createdAt DateTime @default(now())
 
+  notifications Notification[]
+
   @@index([userId])
   @@map("payroll_payments")
+}
+
+enum NotificationType {
+  SHIFT_EDIT_REQUEST_SUBMITTED
+  SHIFT_EDIT_REQUEST_APPROVED
+  SHIFT_EDIT_REQUEST_REJECTED
+  PAYROLL_PAYMENT_RECORDED
+  HOURLY_RATE_CHANGED
+}
+
+model Notification {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    NotificationType
+  message String
+
+  shiftEditRequestId String?
+  shiftEditRequest   ShiftEditRequest? @relation(fields: [shiftEditRequestId], references: [id], onDelete: SetNull)
+
+  payrollPaymentId String?
+  payrollPayment   PayrollPayment? @relation(fields: [payrollPaymentId], references: [id], onDelete: SetNull)
+
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, read])
+  @@map("notifications")
 }
