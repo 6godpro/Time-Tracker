@@ -1,5 +1,5 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Bell } from "lucide-react";
 import {
@@ -12,17 +12,30 @@ import { formatDate, formatTime } from "@/utils/format";
 import type { Notification } from "@/types/notification";
 
 function notificationDestination(notification: Notification) {
-  if (notification.type === "PAYROLL_PAYMENT_RECORDED" && notification.payrollPaymentId) {
-    return { to: "/history" as const, search: { tab: "payroll" as const, paymentId: notification.payrollPaymentId } };
+  if (
+    notification.type === "PAYROLL_PAYMENT_RECORDED" &&
+    notification.payrollPaymentId
+  ) {
+    return {
+      to: "/history" as const,
+      search: {
+        tab: "payroll" as const,
+        paymentId: notification.payrollPaymentId,
+      },
+    };
   }
 
   if (
-    (notification.type === "SHIFT_EDIT_REQUEST_APPROVED" || notification.type === "SHIFT_EDIT_REQUEST_REJECTED") &&
+    (notification.type === "SHIFT_EDIT_REQUEST_APPROVED" ||
+      notification.type === "SHIFT_EDIT_REQUEST_REJECTED") &&
     notification.shiftEditRequestId
   ) {
     return {
       to: "/history" as const,
-      search: { tab: "shifts" as const, shiftEditRequestId: notification.shiftEditRequestId },
+      search: {
+        tab: "shifts" as const,
+        shiftEditRequestId: notification.shiftEditRequestId,
+      },
     };
   }
 
@@ -37,7 +50,7 @@ function NotificationRow({ notification }: { notification: Notification }) {
   const markRead = useMarkNotificationRead();
   const navigate = useNavigate();
 
-  const destination = notificationDestination(notification)
+  const destination = notificationDestination(notification);
 
   return (
     <DropdownMenu.Item
@@ -63,7 +76,7 @@ function NotificationRow({ notification }: { notification: Notification }) {
           {notification.message}
         </p>
       </div>
-      <p className="pl-3.5 text-xs text-ink-soft">
+      <p className="text-xs text-brand">
         {formatDate(notification.createdAt)},{" "}
         {formatTime(notification.createdAt)}
       </p>
@@ -90,8 +103,8 @@ export function NotificationBell() {
           <Bell size={18} />
           {hasUnread ? (
             <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-none text-white">
-    {unreadCount < 9 ? unreadCount : "9+"}
-  </span>
+              {unreadCount < 9 ? unreadCount : "9+"}
+            </span>
           ) : null}
         </button>
       </DropdownMenu.Trigger>
@@ -127,11 +140,13 @@ export function NotificationBell() {
                 No notifications yet
               </p>
             ) : (
-              notifications.map((notification) => (
-                <NotificationRow
-                  key={notification.id}
-                  notification={notification}
-                />
+              notifications.map((notification, index) => (
+                <Fragment key={notification.id}>
+                  <NotificationRow notification={notification} />
+                  {index < notifications.length - 1 ? (
+                    <DropdownMenu.Separator className="my-1 h-px bg-line" />
+                  ) : null}
+                </Fragment>
               ))
             )}
           </div>
