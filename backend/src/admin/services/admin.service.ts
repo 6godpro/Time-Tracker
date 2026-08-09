@@ -7,6 +7,11 @@ import {
   getCompletedShiftsForUser,
   getCompletedShiftsForUserInRange,
 } from "../../shift/services/shift.service";
+import {
+  createHourlyRateChangeNotification,
+  createPayrollPaymentNotification,
+  createShiftEditRequestDecisionNotification,
+} from "@/notification/services/notification.service";
 
 const editRequestInclude = {
   requestedBy: {
@@ -125,7 +130,7 @@ export async function updateEmployeeRate(
 ) {
   const employee = await prisma.user.findUnique({
     where: { id: employeeId },
-    select: { id: true },
+    select: { id: true, hourlyRateCents: true },
   });
 
   if (!employee) {
@@ -137,6 +142,14 @@ export async function updateEmployeeRate(
     data: { hourlyRateCents },
     select: { id: true, hourlyRateCents: true },
   });
+
+  if (hourlyRateCents != employee.hourlyRateCents) {
+    await createHourlyRateChangeNotification(
+      employeeId,
+      employee.hourlyRateCents,
+      hourlyRateCents,
+    );
+  }
 
   return updated;
 }
@@ -360,6 +373,8 @@ export async function recordPayrollPayment(
     },
   });
 
+  await createPayrollPaymentNotification(employeeId, payment);
+
   return serializePayrollPayment(payment);
 }
 
@@ -505,6 +520,13 @@ export async function reviewShiftEditRequest(
     where: { id: requestId },
     include: editRequestInclude,
   });
+
+  await createShiftEditRequestDecisionNotification(
+    updated.requestedBy.id,
+    decision,
+    updated.shift.clockIn,
+    requestId,
+  );
 
   return serializeEditRequest(updated);
 }
