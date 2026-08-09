@@ -10,6 +10,8 @@ function getTransporter(): Transporter {
     );
   }
 
+  // Built lazily (and cached) rather than at module load, so importing
+  // this file never throws — only actually trying to send an email does.
   if (!transporter) {
     transporter = nodemailer.createTransport({
       host: env.smtp.host,
@@ -33,7 +35,7 @@ export async function sendPasswordResetEmail(
   await getTransporter().sendMail({
     from: env.smtp.from,
     to,
-    subject: "Reset your TimeTrack password",
+    subject: "Reset your TimeTracker password",
     text: [
       `Hi ${firstName},`,
       "",
@@ -55,6 +57,43 @@ export async function sendPasswordResetEmail(
       </p>
       <p>Or copy and paste this link into your browser:<br /><a href="${resetLink}">${resetLink}</a></p>
       <p style="color:#667085;font-size:13px;">This link expires in 1 hour and can only be used once. If you didn't request this, you can safely ignore this email — your password won't change.</p>
+      <p>— TimeTracker</p>
+    `,
+  });
+}
+
+export async function sendAccountDeletionEmail(
+  to: string,
+  firstName: string,
+  deleteLink: string,
+): Promise<void> {
+  await getTransporter().sendMail({
+    from: env.smtp.from,
+    to,
+    subject: "Confirm deleting your TimeTracker account",
+    text: [
+      `Hi ${firstName},`,
+      "",
+      "We received a request to delete your TimeTracker account. This permanently removes your account and all of your shift, break, and payroll history — this can't be undone.",
+      "",
+      "Open the link below to confirm:",
+      "",
+      deleteLink,
+      "",
+      "This link expires in 1 hour and can only be used once. If you didn't request this, you can safely ignore this email — your account will stay exactly as it is.",
+      "",
+      "— TimeTracker",
+    ].join("\n"),
+    html: `
+      <p>Hi ${firstName},</p>
+      <p>We received a request to delete your TimeTracker account. This permanently removes your account and all of your shift, break, and payroll history — this can't be undone.</p>
+      <p>
+        <a href="${deleteLink}" style="display:inline-block;padding:10px 20px;background:#dc2626;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:600;">
+          Delete My Account
+        </a>
+      </p>
+      <p>Or copy and paste this link into your browser:<br /><a href="${deleteLink}">${deleteLink}</a></p>
+      <p style="color:#667085;font-size:13px;">This link expires in 1 hour and can only be used once. If you didn't request this, you can safely ignore this email — your account will stay exactly as it is.</p>
       <p>— TimeTracker</p>
     `,
   });
