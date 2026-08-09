@@ -1,20 +1,16 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { AppLayout } from "@/layouts/AppLayout";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Loader } from "@/components/Loader";
 import { StatusBadge } from "@/components/StatusBadge";
-import {
-  useEmployees,
-  useEmployeeShifts,
-  useExportEmployeeShifts,
-  useReviewShiftEditRequest,
-  useShiftEditRequests,
-} from "@/hooks/useAdmin";
+import { useEmployees, useReviewShiftEditRequest, useShiftEditRequests } from "@/hooks/useAdmin";
 import { extractErrorMessage } from "@/api/client";
-import { formatDate, formatDuration, formatTime } from "@/utils/format";
-import { ShiftChart } from "@/components/ShiftChart";
+import { formatDate, formatTime } from "@/utils/format";
 import type { AdminShiftEditRequest, EmployeeSummary } from "@/types/admin";
+
+const PAGE_SIZE = 10;
 
 function PendingEditRequestRow({ request }: { request: AdminShiftEditRequest }) {
   const [reviewNote, setReviewNote] = useState("");
@@ -98,69 +94,83 @@ function PendingEditRequestRow({ request }: { request: AdminShiftEditRequest }) 
   );
 }
 
-function EmployeeRow({
-  employee,
-  isSelected,
-  onSelect,
-  onExport,
-  isExporting,
-}: {
-  employee: EmployeeSummary;
-  isSelected: boolean;
-  onSelect: () => void;
-  onExport: () => void;
-  isExporting: boolean;
-}) {
+function EmployeeRow({ employee }: { employee: EmployeeSummary }) {
   return (
-    <div
-      className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-colors ${
-        isSelected
-          ? "border-brand bg-status-idle-bg"
-          : "border-line bg-card hover:bg-surface"
-      }`}
+    <Link
+      to="/admin/employees/$employeeId"
+      params={{ employeeId: employee.id }}
+      className="flex items-center justify-between gap-3 rounded-xl border border-line bg-card px-4 py-3 transition-colors hover:bg-surface"
     >
-      <button
-        onClick={onSelect}
-        className="flex flex-1 items-center justify-between gap-3 text-left"
-      >
-        <div>
-          <p className="text-sm font-semibold text-ink">{employee.fullName}</p>
-          <p className="text-xs text-ink-soft">{employee.jobTitle}</p>
-        </div>
-        <div className="hidden text-right sm:block">
-          <StatusBadge status={employee.currentStatus} />
-          <p className="mt-1 text-xs text-ink-soft">
-            {employee.totalShifts} completed shifts
-          </p>
-        </div>
-      </button>
-      <Button
-        variant="secondary"
-        onClick={onExport}
-        isLoading={isExporting}
-        className="shrink-0 px-3! py-2! text-xs"
-      >
-        Export
-      </Button>
+      <div>
+        <p className="text-sm font-semibold text-ink">{employee.fullName}</p>
+        <p className="text-xs text-ink-soft">{employee.jobTitle}</p>
+      </div>
+      <div className="hidden text-right sm:block">
+        <StatusBadge status={employee.currentStatus} />
+        <p className="mt-1 text-xs text-ink-soft">{employee.totalShifts} completed shifts</p>
+      </div>
+    </Link>
+  );
+}
+
+function Pagination({
+  page,
+  pageCount,
+  onChange,
+}: {
+  page: number;
+  pageCount: number;
+  onChange: (page: number) => void;
+}) {
+  if (pageCount <= 1) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 flex items-center justify-between">
+      <p className="text-xs text-ink-soft">
+        Page {page} of {pageCount}
+      </p>
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          className="px-3! py-1.5! text-xs"
+          disabled={page <= 1}
+          onClick={() => onChange(page - 1)}
+        >
+          Previous
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          className="px-3! py-1.5! text-xs"
+          disabled={page >= pageCount}
+          onClick={() => onChange(page + 1)}
+        >
+          Next
+        </Button>
+      </div>
     </div>
   );
 }
 
 export function Admin() {
   const { data: employees, isLoading } = useEmployees();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { data: shiftsData, isLoading: isLoadingShifts } =
-    useEmployeeShifts(selectedId);
-  const exportShifts = useExportEmployeeShifts();
-  const [viewMode, setViewMode] = useState<"list" | "chart">("chart");
   const { data: pendingRequests, isLoading: isLoadingRequests } = useShiftEditRequests();
+  const [page, setPage] = useState(1);
+
+  const pageCount = employees ? Math.max(1, Math.ceil(employees.length / PAGE_SIZE)) : 1;
+  const pageEmployees = employees
+    ? employees.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : [];
 
   return (
     <AppLayout>
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold text-ink">Employees</h1>
         <p className="mt-1 text-sm text-ink-soft">
-          View shift activity and export individual employee records
+          View shift activity, payroll, and employee records
         </p>
       </div>
 
@@ -196,96 +206,15 @@ export function Admin() {
           <p className="text-sm font-medium text-ink">No employees yet</p>
         </Card>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <Card>
+          <h2 className="mb-4 text-sm font-semibold text-ink">All Employees</h2>
           <div className="space-y-2">
-            {employees.map((employee) => (
-              <EmployeeRow
-                key={employee.id}
-                employee={employee}
-                isSelected={selectedId === employee.id}
-                onSelect={() => setSelectedId(employee.id)}
-                onExport={() =>
-                  exportShifts.mutate({
-                    employeeId: employee.id,
-                    employeeName: employee.fullName,
-                  })
-                }
-                isExporting={
-                  exportShifts.isPending &&
-                  exportShifts.variables?.employeeId === employee.id
-                }
-              />
+            {pageEmployees.map((employee) => (
+              <EmployeeRow key={employee.id} employee={employee} />
             ))}
           </div>
-
-          <Card>
-            {!selectedId ? (
-              <p className="py-8 text-center text-sm text-ink-soft">
-                Select an employee to view their shifts
-              </p>
-            ) : isLoadingShifts ? (
-              <Loader label="Loading shifts" />
-            ) : !shiftsData || shiftsData.shifts.length === 0 ? (
-              <p className="py-8 text-center text-sm text-ink-soft">
-                No shifts recorded for this employee yet
-              </p>
-            ) : (
-              <div>
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-ink">
-                    {shiftsData.employee.firstName}&apos;s Shifts
-                  </h2>
-                  <div className="flex gap-1 rounded-lg border border-line bg-surface p-0.5">
-                    {(["chart", "list"] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        onClick={() => setViewMode(mode)}
-                        className={`rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors ${
-                          viewMode === mode
-                            ? "bg-card text-ink shadow-sm"
-                            : "text-ink-soft"
-                        }`}
-                      >
-                        {mode}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {viewMode === "chart" ? (
-                  <ShiftChart shifts={shiftsData.shifts} />
-                ) : (
-                  <div className="space-y-3">
-                    {shiftsData.shifts.map((shift) => (
-                      <div
-                        key={shift.id}
-                        className="flex items-center justify-between border-b border-line pb-3 last:border-0 last:pb-0"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-ink">
-                            {formatDate(shift.clockIn)}
-                          </p>
-                          <p className="text-xs text-ink-soft">
-                            {formatTime(shift.clockIn)} &ndash;{" "}
-                            {shift.clockOut
-                              ? formatTime(shift.clockOut)
-                              : "In progress"}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-mono-tab text-sm font-semibold text-ink">
-                            {formatDuration(shift.workedDurationMs)}
-                          </p>
-                          <StatusBadge status={shift.status} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </Card>
-        </div>
+          <Pagination page={page} pageCount={pageCount} onChange={setPage} />
+        </Card>
       )}
     </AppLayout>
   );
