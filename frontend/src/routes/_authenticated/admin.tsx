@@ -1,14 +1,13 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { Admin } from "@/pages/Admin";
 import { Loader } from "@/components/Loader";
 
 export const Route = createFileRoute("/_authenticated/admin")({
-  component: AdminRoute,
+  component: AdminLayout,
 });
 
-function AdminRoute() {
+function AdminLayout() {
   // Reads from the same cached query the authenticated layout already
   // populated, so this doesn't trigger an extra request.
   const { data: user, isLoading } = useCurrentUser();
@@ -28,5 +27,5 @@ function AdminRoute() {
     );
   }
 
-  return <Admin />;
+  return <Outlet />;
 }
