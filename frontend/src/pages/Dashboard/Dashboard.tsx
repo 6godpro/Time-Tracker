@@ -42,6 +42,7 @@ function PendingCorrectionGate() {
       description={`Closed automatically on ${formatDate(shift.clockIn)} after being open too long. Add the real clock-out time before clocking in again.${
         remaining > 0 ? ` (${remaining} more shift${remaining === 1 ? "" : "s"} after this one.)` : ""
       }`}
+      showCloseButton={false}
     >
       <ShiftCorrectionForm shift={shift} />
     </Modal>

@@ -8,9 +8,17 @@ type ModalProps = {
   title: string;
   description?: string;
   children: ReactNode;
+  showCloseButton?: boolean;
 };
 
-export function Modal({ open, onOpenChange, title, description, children }: ModalProps) {
+export function Modal({
+  open,
+  onOpenChange,
+  title,
+  description,
+  children,
+  showCloseButton,
+}: ModalProps) {
   const scrollYRef = useRef(0);
 
   useEffect(() => {
@@ -38,14 +46,20 @@ export function Modal({ open, onOpenChange, title, description, children }: Moda
         >
           <div className="mb-4 flex items-start justify-between">
             <div>
-              <Dialog.Title className="font-display text-lg font-bold text-ink">{title}</Dialog.Title>
+              <Dialog.Title className="font-display text-lg font-bold text-ink">
+                {title}
+              </Dialog.Title>
               {description ? (
-                <Dialog.Description className="mt-1 text-sm text-ink-soft">{description}</Dialog.Description>
+                <Dialog.Description className="mt-1 text-sm text-ink-soft">
+                  {description}
+                </Dialog.Description>
               ) : null}
             </div>
-            <Dialog.Close className="rounded-lg p-1 text-ink-soft outline-none hover:bg-surface hover:text-ink">
-              <X size={18} />
-            </Dialog.Close>
+            {showCloseButton && (
+              <Dialog.Close className="rounded-lg p-1 text-ink-soft outline-none hover:bg-surface hover:text-ink">
+                <X size={18} />
+              </Dialog.Close>
+            )}
           </div>
           {children}
         </Dialog.Content>
