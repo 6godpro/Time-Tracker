@@ -160,10 +160,10 @@ model Notification {
   message String
 
   shiftEditRequestId String?
-  shiftEditRequest   ShiftEditRequest? @relation(fields: [shiftEditRequestId], references: [id], onDelete: SetNull)
+  shiftEditRequest   ShiftEditRequest? @relation(fields: [shiftEditRequestId], references: [id], onDelete: Cascade)
 
   payrollPaymentId String?
-  payrollPayment   PayrollPayment? @relation(fields: [payrollPaymentId], references: [id], onDelete: SetNull)
+  payrollPayment   PayrollPayment? @relation(fields: [payrollPaymentId], references: [id], onDelete: Cascade)
 
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
