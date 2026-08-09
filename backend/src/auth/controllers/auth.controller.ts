@@ -2,10 +2,12 @@ import { Request, Response } from "express";
 import {
   changePassword,
   completeGoogleSignup,
+  confirmAccountDeletion,
   getCurrentUser,
   googleAuth,
   loginUser,
   registerUser,
+  requestAccountDeletion,
   requestPasswordReset,
   resendVerificationEmail,
   resetPassword,
@@ -14,6 +16,7 @@ import {
 import {
   changePasswordSchema,
   completeGoogleSignupSchema,
+  confirmAccountDeletionSchema,
   forgotPasswordSchema,
   googleAuthSchema,
   loginSchema,
@@ -46,41 +49,39 @@ export async function changePasswordHandler(req: Request, res: Response) {
   res.status(200).json({ message: "Password updated." });
 }
 
+export async function requestAccountDeletionHandler(req: Request, res: Response) {
+  await requestAccountDeletion(req.userId as string);
+  res.status(200).json({ message: "Check your email for a link to confirm deleting your account." });
+}
+
+export async function confirmAccountDeletionHandler(req: Request, res: Response) {
+  const input = confirmAccountDeletionSchema.parse(req.body);
+  await confirmAccountDeletion(input.token);
+  res.status(200).json({ message: "Your account has been deleted." });
+}
+
 export async function forgotPasswordHandler(req: Request, res: Response) {
   const input = forgotPasswordSchema.parse(req.body);
   await requestPasswordReset(input.email);
-  res
-    .status(200)
-    .json({
-      message:
-        "If an account exists for that email, a reset link has been sent.",
-    });
+  res.status(200).json({ message: "If an account exists for that email, a reset link has been sent." });
 }
 
 export async function resetPasswordHandler(req: Request, res: Response) {
   const input = resetPasswordSchema.parse(req.body);
   await resetPassword(input.token, input.newPassword);
-  res
-    .status(200)
-    .json({ message: "Your password has been reset. You can now log in." });
+  res.status(200).json({ message: "Your password has been reset. You can now log in." });
 }
 
 export async function verifyEmailHandler(req: Request, res: Response) {
   const input = verifyEmailSchema.parse(req.body);
   await verifyEmail(input.token);
-  res
-    .status(200)
-    .json({ message: "Your email has been verified. You can now log in." });
+  res.status(200).json({ message: "Your email has been verified. You can now log in." });
 }
 
 export async function resendVerificationHandler(req: Request, res: Response) {
   const input = resendVerificationSchema.parse(req.body);
   await resendVerificationEmail(input.email);
-  res
-    .status(200)
-    .json({
-      message: "If that account needs verifying, a new link has been sent.",
-    });
+  res.status(200).json({ message: "If that account needs verifying, a new link has been sent." });
 }
 
 export async function googleAuthHandler(req: Request, res: Response) {

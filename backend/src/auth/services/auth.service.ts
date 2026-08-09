@@ -9,7 +9,7 @@ import {
   signGooglePendingToken,
   verifyGooglePendingToken,
 } from "@/utils/jwt";
-import { sendPasswordResetEmail, sendVerificationEmail } from "@/utils/mailer";
+import { sendAccountDeletionEmail, sendPasswordResetEmail, sendVerificationEmail } from "@/utils/mailer";
 import {
   ChangePasswordInput,
   LoginInput,
@@ -32,6 +32,7 @@ function getGoogleClient(): OAuth2Client {
 const SALT_ROUNDS = 10;
 const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 const EMAIL_VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const ACCOUNT_DELETION_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
@@ -416,4 +417,55 @@ export async function completeGoogleSignup(
 
   const token = signAccessToken({ userId: user.id });
   return { user: toPublicUser(user), token };
+}
+
+async function assertCanDeleteAccount(user: { id: string; role: string }): Promise<void> {
+  if (user.role !== "ADMIN") {
+    return;
+  }
+
+  const otherAdminCount = await prisma.user.count({
+    where: { role: "ADMIN", id: { not: user.id } },
+  });
+
+  if (otherAdminCount === 0) {
+    throw new AppError(
+      "You're the only admin on this account. Promote another employee to admin before deleting your account.",
+      409,
+    );
+  }
+}
+
+export async function requestAccountDeletion(userId: string): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw new AppError("User not found.", 404);
+  }
+  await assertCanDeleteAccount(user);
+
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      accountDeletionTokenHash: hashToken(rawToken),
+      accountDeletionTokenExpiresAt: new Date(Date.now() + ACCOUNT_DELETION_TOKEN_TTL_MS),
+    },
+  });
+
+  const deleteLink = `${env.frontendUrl}/delete-account?token=${rawToken}`;
+  await sendAccountDeletionEmail(user.email, user.firstName, deleteLink);
+}
+
+export async function confirmAccountDeletion(token: string): Promise<void> {
+  const user = await prisma.user.findFirst({
+    where: {
+      accountDeletionTokenHash: hashToken(token),
+      accountDeletionTokenExpiresAt: { gt: new Date() },
+    },
+  });
+  if (!user) {
+    throw new AppError("This deletion link is invalid or has expired. Request a new one from Settings.", 400);
+  }
+  await assertCanDeleteAccount(user);
+  await prisma.user.delete({ where: { id: user.id } });
 }

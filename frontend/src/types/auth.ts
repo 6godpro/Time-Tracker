@@ -10,6 +10,7 @@ export interface User {
   role: Role;
   emailVerified: boolean;
   createdAt: string;
+  hourlyRateCents: number;
 }
 
 export interface AuthResponse {

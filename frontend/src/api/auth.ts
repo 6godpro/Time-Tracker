@@ -48,19 +48,12 @@ export interface CompleteGoogleSignupPayload {
   jobTitle: string;
 }
 
-export async function registerRequest(
-  payload: RegisterPayload,
-): Promise<{ message: string }> {
-  const { data } = await apiClient.post<{ message: string }>(
-    "/auth/register",
-    payload,
-  );
+export async function registerRequest(payload: RegisterPayload): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>("/auth/register", payload);
   return data;
 }
 
-export async function loginRequest(
-  payload: LoginPayload,
-): Promise<AuthResponse> {
+export async function loginRequest(payload: LoginPayload): Promise<AuthResponse> {
   const { data } = await apiClient.post<AuthResponse>("/auth/login", payload);
   return data;
 }
@@ -70,72 +63,53 @@ export async function meRequest(): Promise<{ user: User }> {
   return data;
 }
 
-export async function changePasswordRequest(
-  payload: ChangePasswordPayload,
-): Promise<{ user: User }> {
-  const { data } = await apiClient.patch<{ user: User }>(
-    "/auth/change-password",
-    payload,
-  );
+export async function changePasswordRequest(payload: ChangePasswordPayload): Promise<{ user: User }> {
+  const { data } = await apiClient.patch<{ user: User }>("/auth/change-password", payload);
   return data;
 }
 
-export async function forgotPasswordRequest(
-  payload: ForgotPasswordPayload,
+export interface ConfirmAccountDeletionPayload {
+  token: string;
+}
+
+export async function requestAccountDeletionRequest(): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>("/auth/request-delete-account");
+  return data;
+}
+
+export async function confirmAccountDeletionRequest(
+  payload: ConfirmAccountDeletionPayload,
 ): Promise<{ message: string }> {
-  const { data } = await apiClient.post<{ message: string }>(
-    "/auth/forgot-password",
-    payload,
-  );
+  const { data } = await apiClient.post<{ message: string }>("/auth/confirm-delete-account", payload);
   return data;
 }
 
-export async function resetPasswordRequest(
-  payload: ResetPasswordPayload,
-): Promise<{ message: string }> {
-  const { data } = await apiClient.post<{ message: string }>(
-    "/auth/reset-password",
-    payload,
-  );
+export async function forgotPasswordRequest(payload: ForgotPasswordPayload): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>("/auth/forgot-password", payload);
   return data;
 }
 
-export async function verifyEmailRequest(
-  payload: VerifyEmailPayload,
-): Promise<{ message: string }> {
-  const { data } = await apiClient.post<{ message: string }>(
-    "/auth/verify-email",
-    payload,
-  );
+export async function resetPasswordRequest(payload: ResetPasswordPayload): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>("/auth/reset-password", payload);
   return data;
 }
 
-export async function resendVerificationRequest(
-  payload: ResendVerificationPayload,
-): Promise<{ message: string }> {
-  const { data } = await apiClient.post<{ message: string }>(
-    "/auth/resend-verification",
-    payload,
-  );
+export async function verifyEmailRequest(payload: VerifyEmailPayload): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>("/auth/verify-email", payload);
   return data;
 }
 
-export async function googleAuthRequest(
-  payload: GoogleAuthPayload,
-): Promise<GoogleAuthResponse> {
-  const { data } = await apiClient.post<GoogleAuthResponse>(
-    "/auth/google",
-    payload,
-  );
+export async function resendVerificationRequest(payload: ResendVerificationPayload): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>("/auth/resend-verification", payload);
   return data;
 }
 
-export async function completeGoogleSignupRequest(
-  payload: CompleteGoogleSignupPayload,
-): Promise<AuthResponse> {
-  const { data } = await apiClient.post<AuthResponse>(
-    "/auth/google/complete",
-    payload,
-  );
+export async function googleAuthRequest(payload: GoogleAuthPayload): Promise<GoogleAuthResponse> {
+  const { data } = await apiClient.post<GoogleAuthResponse>("/auth/google", payload);
+  return data;
+}
+
+export async function completeGoogleSignupRequest(payload: CompleteGoogleSignupPayload): Promise<AuthResponse> {
+  const { data } = await apiClient.post<AuthResponse>("/auth/google/complete", payload);
   return data;
 }
