@@ -65,3 +65,7 @@ export function aggregateWorkedHoursByDay(
       hours: Math.round((ms / 3_600_000) * 100) / 100,
     }));
 }
+
+export function formatCurrency(cents: number): string {
+  return (cents / 100).toLocaleString(undefined, { style: "currency", currency: "USD" });
+}
