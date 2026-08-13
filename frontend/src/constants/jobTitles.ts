@@ -5,6 +5,7 @@ export const JOB_TITLES = [
   "Cold Caller",
   "Customer Care Representative",
   "DevOps Engineer",
+  "Telemarketer",
 ] as const;
 
 export type JobTitle = (typeof JOB_TITLES)[number];
