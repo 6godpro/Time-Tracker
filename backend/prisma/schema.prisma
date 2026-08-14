@@ -12,6 +12,33 @@ enum UserRole {
   ADMIN
 }
 
+model Client {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+
+  @@map("clients")
+}
+
+model Job {
+  id                   String   @id @default(uuid())
+  name                 String   @unique
+  minimumWorkMinutes   Int
+  breakIsPaidByDefault Boolean  @default(false)
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  users  User[]
+  shifts Shift[]
+
+  @@map("jobs")
+}
+
 model User {
   id        String   @id @default(uuid())
   firstName String
@@ -21,8 +48,16 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   role      UserRole @default(EMPLOYEE)
-  jobTitle  String
+
   hourlyRateCents Int @default(0)
+
+  currentJobId String
+  currentJob   Job    @relation(fields: [currentJobId], references: [id], onDelete: Restrict)
+
+  breakIsPaidOverride Boolean?
+
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   googleId String? @unique
 
@@ -36,12 +71,15 @@ model User {
   accountDeletionTokenHash      String?
   accountDeletionTokenExpiresAt DateTime?
 
-  shifts Shift[]
+  shifts          Shift[]
   payrollPayments PayrollPayment[]
   notifications   Notification[]
 
   shiftEditRequestsSubmitted ShiftEditRequest[] @relation("ShiftEditRequestedBy")
   shiftEditRequestsReviewed  ShiftEditRequest[] @relation("ShiftEditRequestReviewedBy")
+
+  payrollReconciliations         PayrollReconciliation[] @relation("PayrollReconciliationEmployee")
+  payrollReconciliationsResolved PayrollReconciliation[] @relation("PayrollReconciliationResolvedBy")
 
   @@map("users")
 }
@@ -55,24 +93,25 @@ enum ShiftStatus {
 model Shift {
   id        String      @id @default(uuid())
   userId    String
-  clockIn   DateTime    @default(now())
+  clockIn   DateTime
   clockOut  DateTime?
   status    ShiftStatus @default(WORKING)
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
+  jobId                       String
+  job                         Job    @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  minimumWorkMinutesAtClockIn Int
+
   autoClosed  Boolean @default(false)
   needsReview Boolean @default(false)
-
-  extendedCutoffAt DateTime?
-  extensionNote    String?
-  extendedAt       DateTime?
 
   user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   breaks       Break[]
   editRequests ShiftEditRequest[]
 
   @@index([userId])
+  @@index([jobId])
   @@map("shifts")
 }
 
@@ -113,13 +152,59 @@ model ShiftEditRequest {
 model Break {
   id        String    @id @default(uuid())
   shiftId   String
-  startTime DateTime  @default(now())
+  startTime DateTime
   endTime   DateTime?
 
   shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
 
   @@index([shiftId])
   @@map("breaks")
+}
+
+enum ReconciliationStatus {
+  PENDING
+  CLEAN
+  FLAGGED
+  RESOLVED
+}
+
+model PayrollReconciliation {
+  id         String @id @default(uuid())
+  employeeId String
+  employee   User   @relation("PayrollReconciliationEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  periodFrom DateTime
+  periodTo   DateTime
+
+  systemRegularDurationMs  Float
+  systemBreakDurationMs    Float
+  systemOvertimeDurationMs Float
+
+  clientRegularDurationMs  Float?
+  clientBreakDurationMs    Float?
+  clientOvertimeDurationMs Float?
+
+  status ReconciliationStatus @default(PENDING)
+
+  resolvedRegularDurationMs  Float?
+  resolvedBreakDurationMs    Float?
+  resolvedOvertimeDurationMs Float?
+
+  resolutionReason String?
+
+  resolvedByUserId String?
+  resolvedBy       User?     @relation("PayrollReconciliationResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  resolvedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payrollPayment PayrollPayment?
+
+  @@unique([employeeId, periodFrom, periodTo])
+  @@index([employeeId])
+  @@index([status])
+  @@map("payroll_reconciliations")
 }
 
 model PayrollPayment {
@@ -130,9 +215,16 @@ model PayrollPayment {
   periodFrom DateTime
   periodTo   DateTime
 
-  hourlyRateCents  Int
+  hourlyRateCents Int
+
+  regularDurationMs          Float
+  overtimeDurationMs         Float
+  compensatedBreakDurationMs Float
   workedDurationMs Float
   grossPayCents    Int
+
+  reconciliationId String?                 @unique
+  reconciliation   PayrollReconciliation? @relation(fields: [reconciliationId], references: [id], onDelete: SetNull)
 
   paidAt    DateTime @default(now())
   createdAt DateTime @default(now())

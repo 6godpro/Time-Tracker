@@ -5,6 +5,22 @@ const prisma = new PrismaClient();
 
 const SALT_ROUNDS = 10;
 
+async function resolveJobId(jobName: string): Promise<string> {
+  const existingJob = await prisma.job.findUnique({ where: { name: jobName } });
+
+  if (existingJob) {
+    return existingJob.id;
+  }
+
+  const created = await prisma.job.create({
+    data: { name: jobName, minimumWorkMinutes: 480, breakIsPaidByDefault: false },
+  });
+
+  console.log(`Job "${jobName}" didn't exist yet — created it with an 8h minimum.`);
+
+  return created.id;
+}
+
 async function main() {
   const firstName = process.env.ADMIN_FIRST_NAME;
   const lastName = process.env.ADMIN_LAST_NAME;
@@ -39,12 +55,13 @@ async function main() {
   }
 
   const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+  const currentJobId = await resolveJobId(jobTitle);
 
   await prisma.user.create({
     data: {
       firstName,
       lastName,
-      jobTitle,
+      currentJobId,
       email,
       password: hashedPassword,
       role: "ADMIN",
