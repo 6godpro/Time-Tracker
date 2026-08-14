@@ -8,10 +8,16 @@ import {
   getCompletedShiftsForUserInRange,
 } from "../../shift/services/shift.service";
 import {
+  computeWeeklyBreakdowns,
+  resolveBreakIsPaid,
+  sumWeeklyBreakdowns,
+} from "../../reconciliation/services/payrollCalculations";
+import { getReconciliation } from "../../reconciliation/services/reconciliation.service";
+import {
   createHourlyRateChangeNotification,
   createPayrollPaymentNotification,
   createShiftEditRequestDecisionNotification,
-} from "@/notification/services/notification.service";
+} from "../../notification/services/notification.service";
 
 const editRequestInclude = {
   requestedBy: {
@@ -74,11 +80,22 @@ export async function listEmployees() {
       id: true,
       firstName: true,
       lastName: true,
-      jobTitle: true,
       email: true,
       role: true,
       createdAt: true,
       hourlyRateCents: true,
+      currentJobId: true,
+      currentJob: {
+        select: {
+          id: true,
+          name: true,
+          minimumWorkMinutes: true,
+          breakIsPaidByDefault: true,
+        },
+      },
+      breakIsPaidOverride: true,
+      clientId: true,
+      client: { select: { id: true, name: true } },
       _count: { select: { shifts: true } },
       shifts: {
         where: { status: { in: ["WORKING", "ON_BREAK"] } },
@@ -88,16 +105,43 @@ export async function listEmployees() {
     },
   });
 
-  return users.map((user) => ({
+  type ListedUser = {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    role: string;
+    createdAt: Date;
+    hourlyRateCents: number;
+    currentJob: {
+      id: string;
+      name: string;
+      minimumWorkMinutes: number;
+      breakIsPaidByDefault: boolean;
+    };
+    breakIsPaidOverride: boolean | null;
+    client: { id: string; name: string } | null;
+    _count: { shifts: number };
+    shifts: { status: string }[];
+  };
+
+  return (users as ListedUser[]).map((user) => ({
     id: user.id,
     firstName: user.firstName,
     lastName: user.lastName,
     fullName: fullName(user),
-    jobTitle: user.jobTitle,
     email: user.email,
     role: user.role,
     createdAt: user.createdAt,
     hourlyRateCents: user.hourlyRateCents,
+    job: {
+      id: user.currentJob.id,
+      name: user.currentJob.name,
+      minimumWorkMinutes: user.currentJob.minimumWorkMinutes,
+    },
+    breakIsPaidOverride: user.breakIsPaidOverride,
+    breakIsPaid: resolveBreakIsPaid(user, user.currentJob),
+    client: user.client ? { id: user.client.id, name: user.client.name } : null,
     totalShifts: user._count.shifts,
     currentStatus: user.shifts[0]?.status ?? "NOT_WORKING",
   }));
@@ -110,10 +154,21 @@ async function getEmployeeOrThrow(employeeId: string) {
       id: true,
       firstName: true,
       lastName: true,
-      jobTitle: true,
       email: true,
       role: true,
       hourlyRateCents: true,
+      currentJobId: true,
+      currentJob: {
+        select: {
+          id: true,
+          name: true,
+          minimumWorkMinutes: true,
+          breakIsPaidByDefault: true,
+        },
+      },
+      breakIsPaidOverride: true,
+      clientId: true,
+      client: { select: { id: true, name: true } },
     },
   });
 
@@ -143,7 +198,7 @@ export async function updateEmployeeRate(
     select: { id: true, hourlyRateCents: true },
   });
 
-  if (hourlyRateCents != employee.hourlyRateCents) {
+  if (employee.hourlyRateCents !== hourlyRateCents) {
     await createHourlyRateChangeNotification(
       employeeId,
       employee.hourlyRateCents,
@@ -152,6 +207,107 @@ export async function updateEmployeeRate(
   }
 
   return updated;
+}
+
+export async function updateEmployeeJob(employeeId: string, jobId: string) {
+  await getEmployeeOrThrow(employeeId);
+
+  const job = await prisma.job.findUnique({ where: { id: jobId } });
+
+  if (!job) {
+    throw new AppError("Job not found.", 404);
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: employeeId },
+    data: { currentJobId: jobId },
+    select: {
+      id: true,
+      currentJobId: true,
+      currentJob: { select: { id: true, name: true } },
+    },
+  });
+
+  return updated;
+}
+
+export async function updateEmployeeBreakOverride(
+  employeeId: string,
+  breakIsPaidOverride: boolean | null,
+) {
+  await getEmployeeOrThrow(employeeId);
+
+  const updated = await prisma.user.update({
+    where: { id: employeeId },
+    data: { breakIsPaidOverride },
+    select: { id: true, breakIsPaidOverride: true },
+  });
+
+  return updated;
+}
+
+export async function updateEmployeeClient(
+  employeeId: string,
+  clientId: string | null,
+) {
+  await getEmployeeOrThrow(employeeId);
+
+  if (clientId) {
+    const client = await prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) {
+      throw new AppError("Client not found.", 404);
+    }
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: employeeId },
+    data: { clientId },
+    select: {
+      id: true,
+      clientId: true,
+      client: { select: { id: true, name: true } },
+    },
+  });
+
+  return updated;
+}
+
+function serializeClient(client: {
+  id: string;
+  name: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return client;
+}
+
+export async function listClients() {
+  const clients = await prisma.client.findMany({ orderBy: { name: "asc" } });
+  return clients.map(serializeClient);
+}
+
+export async function createClient(name: string) {
+  const existing = await prisma.client.findUnique({ where: { name } });
+  if (existing) {
+    throw new AppError("A client with this name already exists.", 409);
+  }
+
+  const client = await prisma.client.create({ data: { name } });
+  return serializeClient(client);
+}
+
+export async function setClientActive(clientId: string, isActive: boolean) {
+  const client = await prisma.client.findUnique({ where: { id: clientId } });
+  if (!client) {
+    throw new AppError("Client not found.", 404);
+  }
+
+  const updated = await prisma.client.update({
+    where: { id: clientId },
+    data: { isActive },
+  });
+  return serializeClient(updated);
 }
 
 export async function getEmployeeShifts(employeeId: string) {
@@ -173,7 +329,7 @@ export async function buildEmployeeShiftsWorkbook(employeeId: string): Promise<{
   const shifts = await getCompletedShiftsForUser(employeeId);
 
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "TimeTrack";
+  workbook.creator = "TimeTracker";
   workbook.created = new Date();
 
   const sheet = workbook.addWorksheet("Shifts", {
@@ -231,12 +387,42 @@ export async function buildEmployeeShiftsWorkbook(employeeId: string): Promise<{
   return { employee, buffer };
 }
 
-function sumWorkedMs(shifts: { workedDurationMs: number }[]): number {
-  return shifts.reduce((total, shift) => total + shift.workedDurationMs, 0);
+function grossPayCentsFor(totalMs: number, hourlyRateCents: number): number {
+  return Math.round((totalMs / 3_600_000) * hourlyRateCents);
 }
 
-function grossPayCentsFor(workedMs: number, hourlyRateCents: number): number {
-  return Math.round((workedMs / 3_600_000) * hourlyRateCents);
+async function computeSystemBreakdown(
+  employee: {
+    id: string;
+    breakIsPaidOverride: boolean | null;
+    currentJob: { breakIsPaidByDefault: boolean };
+  },
+  from: Date,
+  to: Date,
+) {
+  const shifts = await getCompletedShiftsForUserInRange(employee.id, from, to);
+  const unresolvedShiftCount = shifts.filter(
+    (shift) => shift.needsReview,
+  ).length;
+
+  const breakdowns = computeWeeklyBreakdowns(
+    shifts.map((shift) => ({
+      clockIn: new Date(shift.clockIn),
+      workedDurationMs: shift.workedDurationMs,
+      breakDurationMs: shift.breakDurationMs,
+      minimumWorkMinutesAtClockIn: shift.minimumWorkMinutesAtClockIn,
+    })),
+  );
+  const totals = sumWeeklyBreakdowns(breakdowns);
+  const breakIsPaid = resolveBreakIsPaid(employee, employee.currentJob);
+
+  return {
+    shiftCount: shifts.length,
+    unresolvedShiftCount,
+    regularDurationMs: totals.regularMs,
+    overtimeDurationMs: totals.overtimeMs,
+    compensatedBreakDurationMs: breakIsPaid ? totals.breakMs : 0,
+  };
 }
 
 export async function getEmployeePayroll(
@@ -245,11 +431,13 @@ export async function getEmployeePayroll(
   to: Date,
 ) {
   const employee = await getEmployeeOrThrow(employeeId);
-  const shifts = await getCompletedShiftsForUserInRange(employeeId, from, to);
-  const workedDurationMs = sumWorkedMs(shifts);
-  const unresolvedShiftCount = shifts.filter(
-    (shift) => shift.needsReview,
-  ).length;
+  const breakdown = await computeSystemBreakdown(employee, from, to);
+  const reconciliation = await getReconciliation(employeeId, from, to);
+
+  const totalMs =
+    breakdown.regularDurationMs +
+    breakdown.overtimeDurationMs +
+    breakdown.compensatedBreakDurationMs;
 
   return {
     employee: {
@@ -260,10 +448,17 @@ export async function getEmployeePayroll(
     },
     from,
     to,
-    shiftCount: shifts.length,
-    workedDurationMs,
-    grossPayCents: grossPayCentsFor(workedDurationMs, employee.hourlyRateCents),
-    unresolvedShiftCount,
+    shiftCount: breakdown.shiftCount,
+
+    unresolvedShiftCount: breakdown.unresolvedShiftCount,
+    system: {
+      regularDurationMs: breakdown.regularDurationMs,
+      overtimeDurationMs: breakdown.overtimeDurationMs,
+      compensatedBreakDurationMs: breakdown.compensatedBreakDurationMs,
+    },
+
+    estimatedGrossPayCents: grossPayCentsFor(totalMs, employee.hourlyRateCents),
+    reconciliation,
   };
 }
 
@@ -273,6 +468,8 @@ type PayrollEmployee = {
   lastName: string;
   email: string;
   hourlyRateCents: number;
+  breakIsPaidOverride: boolean | null;
+  currentJob: { breakIsPaidByDefault: boolean };
 };
 
 export async function getPayrollForAllEmployees(from: Date, to: Date) {
@@ -284,17 +481,18 @@ export async function getPayrollForAllEmployees(from: Date, to: Date) {
       lastName: true,
       email: true,
       hourlyRateCents: true,
+      breakIsPaidOverride: true,
+      currentJob: { select: { breakIsPaidByDefault: true } },
     },
   });
 
   const rows = await Promise.all(
     employees.map(async (employee: PayrollEmployee) => {
-      const shifts = await getCompletedShiftsForUserInRange(
-        employee.id,
-        from,
-        to,
-      );
-      const workedDurationMs = sumWorkedMs(shifts);
+      const breakdown = await computeSystemBreakdown(employee, from, to);
+      const totalMs =
+        breakdown.regularDurationMs +
+        breakdown.overtimeDurationMs +
+        breakdown.compensatedBreakDurationMs;
 
       return {
         employee: {
@@ -303,10 +501,14 @@ export async function getPayrollForAllEmployees(from: Date, to: Date) {
           email: employee.email,
           hourlyRateCents: employee.hourlyRateCents,
         },
-        shiftCount: shifts.length,
-        workedDurationMs,
-        grossPayCents: grossPayCentsFor(
-          workedDurationMs,
+        shiftCount: breakdown.shiftCount,
+        system: {
+          regularDurationMs: breakdown.regularDurationMs,
+          overtimeDurationMs: breakdown.overtimeDurationMs,
+          compensatedBreakDurationMs: breakdown.compensatedBreakDurationMs,
+        },
+        estimatedGrossPayCents: grossPayCentsFor(
+          totalMs,
           employee.hourlyRateCents,
         ),
       };
@@ -317,8 +519,8 @@ export async function getPayrollForAllEmployees(from: Date, to: Date) {
     from,
     to,
     rows,
-    totalGrossPayCents: rows.reduce(
-      (total, row) => total + row.grossPayCents,
+    totalEstimatedGrossPayCents: rows.reduce(
+      (total, row) => total + row.estimatedGrossPayCents,
       0,
     ),
   };
@@ -329,8 +531,12 @@ type PayrollPaymentRow = {
   periodFrom: Date;
   periodTo: Date;
   hourlyRateCents: number;
+  regularDurationMs: number;
+  overtimeDurationMs: number;
+  compensatedBreakDurationMs: number;
   workedDurationMs: number;
   grossPayCents: number;
+  reconciliationId: string | null;
   paidAt: Date;
   createdAt: Date;
 };
@@ -341,8 +547,12 @@ function serializePayrollPayment(payment: PayrollPaymentRow) {
     periodFrom: payment.periodFrom,
     periodTo: payment.periodTo,
     hourlyRateCents: payment.hourlyRateCents,
+    regularDurationMs: payment.regularDurationMs,
+    overtimeDurationMs: payment.overtimeDurationMs,
+    compensatedBreakDurationMs: payment.compensatedBreakDurationMs,
     workedDurationMs: payment.workedDurationMs,
     grossPayCents: payment.grossPayCents,
+    reconciliationId: payment.reconciliationId,
     paidAt: payment.paidAt,
     createdAt: payment.createdAt,
   };
@@ -355,16 +565,23 @@ export async function recordPayrollPayment(
 ) {
   const payroll = await getEmployeePayroll(employeeId, from, to);
 
-  const duplicate = await prisma.payrollPayment.findFirst({
-    where: { userId: employeeId, periodFrom: from, periodTo: to },
-  });
-
   if (payroll.unresolvedShiftCount > 0) {
     throw new AppError(
       `This period includes ${payroll.unresolvedShiftCount} shift${payroll.unresolvedShiftCount === 1 ? "" : "s"} still awaiting a correction request review. Resolve ${payroll.unresolvedShiftCount === 1 ? "it" : "them"} before recording this payment.`,
       409,
     );
   }
+
+  if (!payroll.reconciliation || !payroll.reconciliation.resolved) {
+    throw new AppError(
+      "This period hasn't been reconciled against the client's record yet. Start a reconciliation and resolve any discrepancies before recording payment.",
+      409,
+    );
+  }
+
+  const duplicate = await prisma.payrollPayment.findFirst({
+    where: { userId: employeeId, periodFrom: from, periodTo: to },
+  });
 
   if (duplicate) {
     throw new AppError(
@@ -373,14 +590,33 @@ export async function recordPayrollPayment(
     );
   }
 
+  const alreadyPaid = await prisma.payrollPayment.findUnique({
+    where: { reconciliationId: payroll.reconciliation.id },
+  });
+
+  if (alreadyPaid) {
+    throw new AppError("This reconciliation has already been paid out.", 409);
+  }
+
+  const { regularDurationMs, overtimeDurationMs, breakDurationMs } =
+    payroll.reconciliation.resolved;
+  const totalMs = regularDurationMs + overtimeDurationMs + breakDurationMs;
+
   const payment = await prisma.payrollPayment.create({
     data: {
       userId: employeeId,
       periodFrom: from,
       periodTo: to,
       hourlyRateCents: payroll.employee.hourlyRateCents,
-      workedDurationMs: payroll.workedDurationMs,
-      grossPayCents: payroll.grossPayCents,
+      regularDurationMs,
+      overtimeDurationMs,
+      compensatedBreakDurationMs: breakDurationMs,
+      workedDurationMs: regularDurationMs + overtimeDurationMs,
+      grossPayCents: grossPayCentsFor(
+        totalMs,
+        payroll.employee.hourlyRateCents,
+      ),
+      reconciliationId: payroll.reconciliation.id,
     },
   });
 
@@ -407,7 +643,7 @@ export async function buildPayrollWorkbook(
   const { rows } = await getPayrollForAllEmployees(from, to);
 
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "TimeTrack";
+  workbook.creator = "TimeTracker";
   workbook.created = new Date();
 
   const sheet = workbook.addWorksheet("Payroll", {
@@ -417,9 +653,11 @@ export async function buildPayrollWorkbook(
   sheet.columns = [
     { header: "Employee", key: "employee", width: 26 },
     { header: "Email", key: "email", width: 28 },
-    { header: "Hours Worked", key: "hours", width: 16 },
+    { header: "Regular Hours", key: "regularHours", width: 16 },
+    { header: "Overtime Hours", key: "overtimeHours", width: 16 },
+    { header: "Paid Break Hours", key: "breakHours", width: 18 },
     { header: "Hourly Rate", key: "rate", width: 14 },
-    { header: "Gross Pay", key: "grossPay", width: 14 },
+    { header: "Est. Gross Pay", key: "grossPay", width: 16 },
   ];
 
   sheet.getRow(1).font = {
@@ -438,9 +676,11 @@ export async function buildPayrollWorkbook(
     sheet.addRow({
       employee: row.employee.fullName,
       email: row.employee.email,
-      hours: msToHours(row.workedDurationMs),
+      regularHours: msToHours(row.system.regularDurationMs),
+      overtimeHours: msToHours(row.system.overtimeDurationMs),
+      breakHours: msToHours(row.system.compensatedBreakDurationMs),
       rate: row.employee.hourlyRateCents / 100,
-      grossPay: row.grossPayCents / 100,
+      grossPay: row.estimatedGrossPayCents / 100,
     });
   }
 
@@ -458,9 +698,6 @@ export async function buildPayrollWorkbook(
   return workbook.xlsx.writeBuffer();
 }
 
-// Defaults to PENDING-only when no status is given — that's the queue an
-// admin actually needs to act on day to day. Passing an explicit status
-// (including APPROVED/REJECTED) lets the UI show resolved history too.
 export async function listShiftEditRequests(
   status?: "PENDING" | "APPROVED" | "REJECTED",
 ) {
@@ -494,9 +731,6 @@ export async function reviewShiftEditRequest(
   const now = new Date();
 
   if (decision === "APPROVED") {
-    // Both writes happen together: approving a request with no visible
-    // effect on the shift (or applying the new clockOut without ever
-    // marking the request approved) would leave the two out of sync.
     await prisma.$transaction([
       prisma.shiftEditRequest.update({
         where: { id: requestId },
@@ -513,9 +747,6 @@ export async function reviewShiftEditRequest(
       }),
     ]);
   } else {
-    // Rejecting leaves the shift untouched — needsReview (if it was set)
-    // stays true, so the employee can see it's still unresolved and
-    // submit another request.
     await prisma.shiftEditRequest.update({
       where: { id: requestId },
       data: {

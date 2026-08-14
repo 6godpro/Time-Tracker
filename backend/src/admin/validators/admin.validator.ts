@@ -25,6 +25,36 @@ export const updateHourlyRateSchema = z.object({
 
 export type UpdateHourlyRateInput = z.infer<typeof updateHourlyRateSchema>;
 
+export const updateEmployeeJobSchema = z.object({
+  jobId: z.string().trim().min(1, "Select a job"),
+});
+
+export type UpdateEmployeeJobInput = z.infer<typeof updateEmployeeJobSchema>;
+
+export const updateEmployeeBreakOverrideSchema = z.object({
+  breakIsPaidOverride: z.boolean().nullable(),
+});
+
+export type UpdateEmployeeBreakOverrideInput = z.infer<typeof updateEmployeeBreakOverrideSchema>;
+
+export const updateEmployeeClientSchema = z.object({
+  clientId: z.string().trim().min(1).nullable(),
+});
+
+export type UpdateEmployeeClientInput = z.infer<typeof updateEmployeeClientSchema>;
+
+export const createClientSchema = z.object({
+  name: z.string().trim().min(1, "Client name is required").max(100),
+});
+
+export type CreateClientInput = z.infer<typeof createClientSchema>;
+
+export const setClientActiveSchema = z.object({
+  isActive: z.boolean(),
+});
+
+export type SetClientActiveInput = z.infer<typeof setClientActiveSchema>;
+
 export const payrollRangeQuerySchema = z
   .object({
     from: z.coerce.date({ errorMap: () => ({ message: "A valid \"from\" date is required." }) }),
