@@ -8,6 +8,7 @@ import breakRoutes from "./break/routes/break.routes";
 import adminRoutes from "./admin/routes/admin.routes";
 import notificationRoutes from "./notification/routes/notification.routes";
 import payrollRoutes from "./payroll/routes/payroll.routes";
+import jobRoutes from "./job/routes/job.routes";
 
 export const app = express();
 
@@ -24,6 +25,7 @@ app.use("/break", breakRoutes);
 app.use("/admin", adminRoutes);
 app.use("/notification", notificationRoutes);
 app.use("/payroll", payrollRoutes);
+app.use("/jobs", jobRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
