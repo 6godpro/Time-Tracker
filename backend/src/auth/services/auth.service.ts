@@ -9,7 +9,11 @@ import {
   signGooglePendingToken,
   verifyGooglePendingToken,
 } from "@/utils/jwt";
-import { sendAccountDeletionEmail, sendPasswordResetEmail, sendVerificationEmail } from "@/utils/mailer";
+import {
+  sendAccountDeletionEmail,
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+} from "@/utils/mailer";
 import {
   ChangePasswordInput,
   LoginInput,
@@ -38,17 +42,19 @@ function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-function toPublicUser(user: {
+type PublicUserSource = {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
-  jobTitle: string;
   role: string;
   emailVerified: boolean;
   createdAt: Date;
+  currentJob: { id: string; name: string };
   hourlyRateCents: number;
-}) {
+};
+
+function toPublicUser(user: PublicUserSource) {
   return {
     id: user.id,
     firstName: user.firstName,
@@ -57,10 +63,23 @@ function toPublicUser(user: {
     email: user.email,
     createdAt: user.createdAt,
     role: user.role,
-    jobTitle: user.jobTitle,
+    jobId: user.currentJob.id,
+    jobTitle: user.currentJob.name,
     emailVerified: user.emailVerified,
     hourlyRateCents: user.hourlyRateCents,
   };
+}
+
+const userWithJobInclude = { currentJob: true };
+
+async function getActiveJobOrThrow(jobId: string) {
+  const job = await prisma.job.findUnique({ where: { id: jobId } });
+
+  if (!job || !job.isActive) {
+    throw new AppError("Select a valid job.", 400);
+  }
+
+  return job;
 }
 
 async function issueAndSendVerificationEmail(user: {
@@ -96,13 +115,15 @@ export async function registerUser(
     throw new AppError("An account with this email already exists.", 409);
   }
 
+  await getActiveJobOrThrow(input.jobId);
+
   const hashedPassword = await bcrypt.hash(input.password, SALT_ROUNDS);
 
   const user = await prisma.user.create({
     data: {
       firstName: input.firstName,
       lastName: input.lastName,
-      jobTitle: input.jobTitle,
+      currentJobId: input.jobId,
       email: input.email,
       password: hashedPassword,
       role: "EMPLOYEE",
@@ -119,7 +140,10 @@ export async function registerUser(
 }
 
 export async function loginUser(input: LoginInput) {
-  const user = await prisma.user.findUnique({ where: { email: input.email } });
+  const user = await prisma.user.findUnique({
+    where: { email: input.email },
+    include: userWithJobInclude,
+  });
 
   if (!user) {
     throw new AppError("Invalid email or password.", 401);
@@ -153,7 +177,10 @@ export async function loginUser(input: LoginInput) {
 }
 
 export async function getCurrentUser(userId: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: userWithJobInclude,
+  });
 
   if (!user) {
     throw new AppError("User not found.", 404);
@@ -339,11 +366,15 @@ async function linkOrReuseGoogleAccount(
   googleId: string,
 ) {
   if (existing.googleId) {
-    return prisma.user.findUniqueOrThrow({ where: { id: existing.id } });
+    return prisma.user.findUniqueOrThrow({
+      where: { id: existing.id },
+      include: userWithJobInclude,
+    });
   }
   return prisma.user.update({
     where: { id: existing.id },
     data: { googleId, emailVerified: true },
+    include: userWithJobInclude,
   });
 }
 
@@ -380,7 +411,7 @@ export async function googleAuth(idToken: string): Promise<GoogleAuthResult> {
 
 export async function completeGoogleSignup(
   pendingToken: string,
-  jobTitle: string,
+  jobId: string,
 ) {
   let pending;
   try {
@@ -407,19 +438,23 @@ export async function completeGoogleSignup(
       firstName: pending.firstName || "Google",
       lastName: pending.lastName || "User",
       email: pending.email,
-      jobTitle,
+      currentJobId: jobId,
       googleId: pending.googleId,
       role: "EMPLOYEE",
       emailVerified: true,
       password: null,
     },
+    include: userWithJobInclude,
   });
 
   const token = signAccessToken({ userId: user.id });
   return { user: toPublicUser(user), token };
 }
 
-async function assertCanDeleteAccount(user: { id: string; role: string }): Promise<void> {
+async function assertCanDeleteAccount(user: {
+  id: string;
+  role: string;
+}): Promise<void> {
   if (user.role !== "ADMIN") {
     return;
   }
@@ -448,7 +483,9 @@ export async function requestAccountDeletion(userId: string): Promise<void> {
     where: { id: user.id },
     data: {
       accountDeletionTokenHash: hashToken(rawToken),
-      accountDeletionTokenExpiresAt: new Date(Date.now() + ACCOUNT_DELETION_TOKEN_TTL_MS),
+      accountDeletionTokenExpiresAt: new Date(
+        Date.now() + ACCOUNT_DELETION_TOKEN_TTL_MS,
+      ),
     },
   });
 
@@ -464,7 +501,10 @@ export async function confirmAccountDeletion(token: string): Promise<void> {
     },
   });
   if (!user) {
-    throw new AppError("This deletion link is invalid or has expired. Request a new one from Settings.", 400);
+    throw new AppError(
+      "This deletion link is invalid or has expired. Request a new one from Settings.",
+      400,
+    );
   }
   await assertCanDeleteAccount(user);
   await prisma.user.delete({ where: { id: user.id } });

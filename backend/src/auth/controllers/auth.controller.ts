@@ -92,6 +92,6 @@ export async function googleAuthHandler(req: Request, res: Response) {
 
 export async function completeGoogleSignupHandler(req: Request, res: Response) {
   const input = completeGoogleSignupSchema.parse(req.body);
-  const result = await completeGoogleSignup(input.pendingToken, input.jobTitle);
+  const result = await completeGoogleSignup(input.pendingToken, input.jobId);
   res.status(201).json(result);
 }
