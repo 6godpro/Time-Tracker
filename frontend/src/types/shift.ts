@@ -26,12 +26,12 @@ export interface Shift {
   status: ShiftStatus;
   autoClosed: boolean;
   needsReview: boolean;
+  jobId: string;
+  minimumWorkMinutesAtClockIn: number;
   autoCloseAt: string;
-  extendWindowStartsAt: string;
-  extendedCutoffAt: string | null;
-  extensionNote: string | null;
-  extendedAt: string | null;
   breakDurationMs: number;
+  breakAllowanceMs: number;
+  breakRemainingMs: number;
   workedDurationMs: number;
   activeBreak: { id: string; startTime: string } | null;
   breaks: BreakRecord[];
