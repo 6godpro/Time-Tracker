@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { AppLayout } from "@/layouts/AppLayout";
 import { Card } from "@/components/Card";
@@ -21,7 +21,7 @@ function ShiftReviewNotice({ shift }: { shift: Shift }) {
   const [isRequesting, setIsRequesting] = useState(false);
 
   const latestRequest = shift.editRequests[0] ?? null;
-
+  
   if (latestRequest?.status === "PENDING") {
     return (
       <div className="mt-3 rounded-xl bg-status-break-bg px-3 py-2 text-xs text-status-break">
@@ -89,6 +89,23 @@ function ShiftHistoryList({
 }) {
   const { data: shifts, isLoading } = useShiftHistory();
   const [page, setPage] = useState(1);
+  const appliedHighlightRef = useRef(false);
+
+  useEffect(() => {
+    if (!highlightRequestId || appliedHighlightRef.current || !shifts) {
+      return;
+    }
+
+    const index = shifts.findIndex((shift) =>
+      shift.editRequests.some((request) => request.id === highlightRequestId),
+    );
+
+    if (index >= 0) {
+      setPage(Math.floor(index / SHIFTS_PAGE_SIZE) + 1);
+    }
+
+    appliedHighlightRef.current = true;
+  }, [highlightRequestId, shifts]);
 
   if (isLoading) {
     return (
@@ -124,7 +141,10 @@ function ShiftHistoryList({
     <div>
       <div className="space-y-3">
         {pageShifts.map((shift) => (
-          <Card key={shift.id} className="p-5">
+          <Card
+            key={shift.id}
+            className={`p-5 ${shift.id === highlightedShiftId ? "ring-2 ring-brand" : ""}`}
+          >
             <div className="flex items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
@@ -134,11 +154,6 @@ function ShiftHistoryList({
                   {shift.autoClosed ? (
                     <span className="rounded-full bg-status-break-bg px-2 py-0.5 text-[11px] font-medium text-status-break">
                       Auto-closed
-                    </span>
-                  ) : null}
-                  {shift.extendedCutoffAt ? (
-                    <span className="rounded-full bg-status-idle-bg px-2 py-0.5 text-[11px] font-medium text-ink-soft">
-                      Extended
                     </span>
                   ) : null}
                 </div>
@@ -200,7 +215,7 @@ function ShiftHistoryList({
 }
 
 const CURRENT_YEAR = new Date().getFullYear();
-const YEARS = Array.from({ length: 1 }, (_, i) => String(CURRENT_YEAR - i));
+const YEARS = Array.from({ length: 5 }, (_, i) => String(CURRENT_YEAR - i));
 const MONTHS = [
   "January",
   "February",
@@ -220,12 +235,13 @@ function monthIndex(monthName: string): number {
   return MONTHS.indexOf(monthName) + 1;
 }
 
-interface PaymentRowType {
+function PaymentRow({
+  payment,
+  highlighted,
+}: {
   payment: PayrollPayment;
   highlighted: boolean;
-}
-
-function PaymentRow({ payment, highlighted }: PaymentRowType) {
+}) {
   return (
     <Card className={`p-5 ${highlighted ? "ring-2 ring-brand" : ""}`}>
       <div className="flex items-center justify-between gap-4">
@@ -360,6 +376,8 @@ export function History() {
       search: {
         tab: nextTab,
         paymentId: nextTab === "payroll" ? search.paymentId : undefined,
+        shiftEditRequestId:
+          nextTab === "shifts" ? search.shiftEditRequestId : undefined,
       },
       replace: true,
     });
