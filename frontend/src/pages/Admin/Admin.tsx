@@ -5,14 +5,22 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Loader } from "@/components/Loader";
 import { StatusBadge } from "@/components/StatusBadge";
-import { useEmployees, useReviewShiftEditRequest, useShiftEditRequests } from "@/hooks/useAdmin";
+import {
+  useEmployees,
+  useReviewShiftEditRequest,
+  useShiftEditRequests,
+} from "@/hooks/useAdmin";
 import { extractErrorMessage } from "@/api/client";
 import { formatDate, formatTime } from "@/utils/format";
 import type { AdminShiftEditRequest, EmployeeSummary } from "@/types/admin";
 
 const PAGE_SIZE = 10;
 
-function PendingEditRequestRow({ request }: { request: AdminShiftEditRequest }) {
+function PendingEditRequestRow({
+  request,
+}: {
+  request: AdminShiftEditRequest;
+}) {
   const [reviewNote, setReviewNote] = useState("");
   const review = useReviewShiftEditRequest();
 
@@ -27,24 +35,30 @@ function PendingEditRequestRow({ request }: { request: AdminShiftEditRequest }) 
     <div className="rounded-xl border border-line bg-card p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-ink">{request.requestedBy.fullName}</p>
+          <p className="text-sm font-semibold text-ink">
+            {request.requestedBy.fullName}
+          </p>
           <p className="text-xs text-ink-soft">{request.requestedBy.email}</p>
         </div>
-        <p className="shrink-0 text-xs text-ink-soft">Requested {formatDate(request.createdAt)}</p>
+        <p className="shrink-0 text-xs text-ink-soft">
+          Requested {formatDate(request.createdAt)}
+        </p>
       </div>
 
       <div className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
         <div>
           <p className="text-ink-soft">Current shift record</p>
           <p className="font-medium text-ink">
-            {formatDate(request.shift.clockIn)}, {formatTime(request.shift.clockIn)} &ndash;{" "}
+            {formatDate(request.shift.clockIn)},{" "}
+            {formatTime(request.shift.clockIn)} &ndash;{" "}
             {request.shift.clockOut ? formatTime(request.shift.clockOut) : "—"}
           </p>
         </div>
         <div>
           <p className="text-ink-soft">Proposed clock-out</p>
           <p className="font-medium text-ink">
-            {formatDate(request.proposedClockOut)}, {formatTime(request.proposedClockOut)}
+            {formatDate(request.proposedClockOut)},{" "}
+            {formatTime(request.proposedClockOut)}
           </p>
         </div>
       </div>
@@ -67,7 +81,10 @@ function PendingEditRequestRow({ request }: { request: AdminShiftEditRequest }) 
             type="button"
             className="px-3! py-2! text-xs"
             disabled={review.isPending}
-            isLoading={review.isPending && review.variables?.payload.decision === "APPROVED"}
+            isLoading={
+              review.isPending &&
+              review.variables?.payload.decision === "APPROVED"
+            }
             onClick={() => handleReview("APPROVED")}
           >
             Approve
@@ -77,7 +94,10 @@ function PendingEditRequestRow({ request }: { request: AdminShiftEditRequest }) 
             variant="danger"
             className="px-3! py-2! text-xs"
             disabled={review.isPending}
-            isLoading={review.isPending && review.variables?.payload.decision === "REJECTED"}
+            isLoading={
+              review.isPending &&
+              review.variables?.payload.decision === "REJECTED"
+            }
             onClick={() => handleReview("REJECTED")}
           >
             Reject
@@ -103,11 +123,13 @@ function EmployeeRow({ employee }: { employee: EmployeeSummary }) {
     >
       <div>
         <p className="text-sm font-semibold text-ink">{employee.fullName}</p>
-        <p className="text-xs text-ink-soft">{employee.jobTitle}</p>
+        <p className="text-xs text-ink-soft">{employee.job.name}</p>
       </div>
       <div className="hidden text-right sm:block">
         <StatusBadge status={employee.currentStatus} />
-        <p className="mt-1 text-xs text-ink-soft">{employee.totalShifts} completed shifts</p>
+        <p className="mt-1 text-xs text-ink-soft">
+          {employee.totalShifts} completed shifts
+        </p>
       </div>
     </Link>
   );
@@ -157,26 +179,41 @@ function Pagination({
 
 export function Admin() {
   const { data: employees, isLoading } = useEmployees();
-  const { data: pendingRequests, isLoading: isLoadingRequests } = useShiftEditRequests();
+  const { data: pendingRequests, isLoading: isLoadingRequests } =
+    useShiftEditRequests();
   const [page, setPage] = useState(1);
 
-  const pageCount = employees ? Math.max(1, Math.ceil(employees.length / PAGE_SIZE)) : 1;
+  const pageCount = employees
+    ? Math.max(1, Math.ceil(employees.length / PAGE_SIZE))
+    : 1;
   const pageEmployees = employees
     ? employees.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
     : [];
 
   return (
     <AppLayout>
-      <div className="mb-6">
-        <h1 className="font-display text-2xl font-bold text-ink">Employees</h1>
-        <p className="mt-1 text-sm text-ink-soft">
-          View shift activity, payroll, and employee records
-        </p>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-ink">
+            Employees
+          </h1>
+          <p className="mt-1 text-sm text-ink-soft">
+            View shift activity, payroll, and employee records
+          </p>
+        </div>
+        <Link
+          to="/admin/jobs"
+          className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface"
+        >
+          Manage Jobs &amp; Clients
+        </Link>
       </div>
 
       <Card className="mb-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-ink">Pending Shift Corrections</h2>
+          <h2 className="text-sm font-semibold text-ink">
+            Pending Shift Corrections
+          </h2>
           {pendingRequests && pendingRequests.length > 0 ? (
             <span className="rounded-full bg-status-break-bg px-2.5 py-1 text-xs font-medium text-status-break">
               {pendingRequests.length} pending
@@ -187,7 +224,9 @@ export function Admin() {
         {isLoadingRequests ? (
           <Loader label="Loading requests" />
         ) : !pendingRequests || pendingRequests.length === 0 ? (
-          <p className="py-4 text-center text-sm text-ink-soft">No pending correction requests</p>
+          <p className="py-4 text-center text-sm text-ink-soft">
+            No pending correction requests
+          </p>
         ) : (
           <div className="space-y-3">
             {pendingRequests.map((request) => (
@@ -209,9 +248,12 @@ export function Admin() {
         <Card>
           <h2 className="mb-4 text-sm font-semibold text-ink">All Employees</h2>
           <div className="space-y-2">
-            {pageEmployees.map((employee) => (
-              <EmployeeRow key={employee.id} employee={employee} />
-            ))}
+            {pageEmployees.map(
+              (employee) =>
+                employee.role != "ADMIN" && (
+                  <EmployeeRow key={employee.id} employee={employee} />
+                ),
+            )}
           </div>
           <Pagination page={page} pageCount={pageCount} onChange={setPage} />
         </Card>
