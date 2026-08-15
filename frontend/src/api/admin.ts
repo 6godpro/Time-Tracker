@@ -1,13 +1,16 @@
 import { apiClient } from "./client";
 import type {
   AdminShiftEditRequest,
+  DurationBreakdown,
   EmployeePayroll,
   EmployeeShiftsResponse,
   EmployeeSummary,
   PayrollPayment,
+  PayrollReconciliation,
   PayrollSummary,
 } from "@/types/admin";
 import type { ShiftEditRequestStatus } from "@/types/shift";
+import type { Client, Job } from "@/types/job";
 
 export interface PayrollDateRange {
   from: string;
@@ -83,6 +86,125 @@ export async function updateEmployeeRateRequest(
     { hourlyRateCents },
   );
   return data.employee;
+}
+
+export async function updateEmployeeJobRequest(
+  employeeId: string,
+  jobId: string,
+): Promise<{ id: string; currentJobId: string }> {
+  const { data } = await apiClient.patch<{ employee: { id: string; currentJobId: string } }>(
+    `/admin/employees/${employeeId}/job`,
+    { jobId },
+  );
+  return data.employee;
+}
+
+export async function updateEmployeeBreakOverrideRequest(
+  employeeId: string,
+  breakIsPaidOverride: boolean | null,
+): Promise<{ id: string; breakIsPaidOverride: boolean | null }> {
+  const { data } = await apiClient.patch<{ employee: { id: string; breakIsPaidOverride: boolean | null } }>(
+    `/admin/employees/${employeeId}/break-override`,
+    { breakIsPaidOverride },
+  );
+  return data.employee;
+}
+
+export async function updateEmployeeClientRequest(
+  employeeId: string,
+  clientId: string | null,
+): Promise<{ id: string; clientId: string | null }> {
+  const { data } = await apiClient.patch<{ employee: { id: string; clientId: string | null } }>(
+    `/admin/employees/${employeeId}/client`,
+    { clientId },
+  );
+  return data.employee;
+}
+
+export async function listAllJobsRequest(): Promise<Job[]> {
+  const { data } = await apiClient.get<{ jobs: Job[] }>("/admin/jobs");
+  return data.jobs;
+}
+
+export async function createJobRequest(input: {
+  name: string;
+  minimumWorkMinutes: number;
+  breakIsPaidByDefault: boolean;
+}): Promise<Job> {
+  const { data } = await apiClient.post<{ job: Job }>("/admin/jobs", input);
+  return data.job;
+}
+
+export async function updateJobRequest(
+  jobId: string,
+  input: Partial<{ name: string; minimumWorkMinutes: number; breakIsPaidByDefault: boolean }>,
+): Promise<Job> {
+  const { data } = await apiClient.patch<{ job: Job }>(`/admin/jobs/${jobId}`, input);
+  return data.job;
+}
+
+export async function setJobActiveRequest(jobId: string, isActive: boolean): Promise<Job> {
+  const { data } = await apiClient.patch<{ job: Job }>(`/admin/jobs/${jobId}/active`, { isActive });
+  return data.job;
+}
+
+export async function listClientsRequest(): Promise<Client[]> {
+  const { data } = await apiClient.get<{ clients: Client[] }>("/admin/clients");
+  return data.clients;
+}
+
+export async function createClientRequest(name: string): Promise<Client> {
+  const { data } = await apiClient.post<{ client: Client }>("/admin/clients", { name });
+  return data.client;
+}
+
+export async function setClientActiveRequest(clientId: string, isActive: boolean): Promise<Client> {
+  const { data } = await apiClient.patch<{ client: Client }>(`/admin/clients/${clientId}/active`, { isActive });
+  return data.client;
+}
+
+export async function getReconciliationRequest(
+  employeeId: string,
+  range: PayrollDateRange,
+): Promise<PayrollReconciliation | null> {
+  const { data } = await apiClient.get<{ reconciliation: PayrollReconciliation | null }>(
+    `/admin/employees/${employeeId}/payroll/reconciliation`,
+    { params: toRangeParams(range) },
+  );
+  return data.reconciliation;
+}
+
+export async function createReconciliationRequest(
+  employeeId: string,
+  range: PayrollDateRange,
+): Promise<PayrollReconciliation> {
+  const { data } = await apiClient.post<{ reconciliation: PayrollReconciliation }>(
+    `/admin/employees/${employeeId}/payroll/reconciliation`,
+    toRangeParams(range),
+  );
+  return data.reconciliation;
+}
+
+export async function submitClientFiguresRequest(
+  reconciliationId: string,
+  figures: DurationBreakdown,
+): Promise<PayrollReconciliation> {
+  const { data } = await apiClient.post<{ reconciliation: PayrollReconciliation }>(
+    `/admin/payroll/reconciliation/${reconciliationId}/client-figures`,
+    figures,
+  );
+  return data.reconciliation;
+}
+
+export async function resolveReconciliationRequest(
+  reconciliationId: string,
+  input: DurationBreakdown & { reason: string },
+): Promise<PayrollReconciliation> {
+  const { data } = await apiClient.post<{ reconciliation: PayrollReconciliation }>(
+    `/admin/payroll/reconciliation/${reconciliationId}/resolve`,
+    input,
+  );
+  return data.reconciliation;
 }
 
 export async function employeePayrollRequest(

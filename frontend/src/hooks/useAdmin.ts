@@ -1,20 +1,35 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  createClientRequest,
+  createJobRequest,
+  createReconciliationRequest,
   employeePayrollRequest,
   employeeShiftsRequest,
   exportEmployeeShifts,
   exportPayroll,
+  getReconciliationRequest,
+  listAllJobsRequest,
+  listClientsRequest,
   listEmployeesRequest,
   listShiftEditRequestsRequest,
   payrollPaymentsRequest,
   payrollRequest,
   PayrollDateRange,
   recordPayrollPaymentRequest,
+  resolveReconciliationRequest,
   ReviewShiftEditRequestPayload,
   reviewShiftEditRequestRequest,
+  setClientActiveRequest,
+  setJobActiveRequest,
+  submitClientFiguresRequest,
+  updateEmployeeBreakOverrideRequest,
+  updateEmployeeClientRequest,
+  updateEmployeeJobRequest,
   updateEmployeeRateRequest,
+  updateJobRequest,
 } from "../api/admin";
 import type { ShiftEditRequestStatus } from "@/types/shift";
+import type { DurationBreakdown } from "@/types/admin";
 
 export function useEmployees() {
   return useQuery({
@@ -79,6 +94,174 @@ export function useUpdateEmployeeRate() {
       updateEmployeeRateRequest(employeeId, hourlyRateCents),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "employees"] });
+    },
+  });
+}
+
+export function useUpdateEmployeeJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ employeeId, jobId }: { employeeId: string; jobId: string }) =>
+      updateEmployeeJobRequest(employeeId, jobId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "employees"] });
+    },
+  });
+}
+
+export function useUpdateEmployeeBreakOverride() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ employeeId, breakIsPaidOverride }: { employeeId: string; breakIsPaidOverride: boolean | null }) =>
+      updateEmployeeBreakOverrideRequest(employeeId, breakIsPaidOverride),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "employees"] });
+    },
+  });
+}
+
+export function useUpdateEmployeeClient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ employeeId, clientId }: { employeeId: string; clientId: string | null }) =>
+      updateEmployeeClientRequest(employeeId, clientId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "employees"] });
+    },
+  });
+}
+
+export function useAdminJobs() {
+  return useQuery({
+    queryKey: ["admin", "jobs"],
+    queryFn: listAllJobsRequest,
+  });
+}
+
+export function useCreateJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createJobRequest,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["jobs", "active"] });
+    },
+  });
+}
+
+export function useUpdateJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      jobId,
+      input,
+    }: {
+      jobId: string;
+      input: Partial<{ name: string; minimumWorkMinutes: number; breakIsPaidByDefault: boolean }>;
+    }) => updateJobRequest(jobId, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["jobs", "active"] });
+    },
+  });
+}
+
+export function useSetJobActive() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ jobId, isActive }: { jobId: string; isActive: boolean }) => setJobActiveRequest(jobId, isActive),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["jobs", "active"] });
+    },
+  });
+}
+
+export function useAdminClients() {
+  return useQuery({
+    queryKey: ["admin", "clients"],
+    queryFn: listClientsRequest,
+  });
+}
+
+export function useCreateClient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createClientRequest,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "clients"] });
+    },
+  });
+}
+
+export function useSetClientActive() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clientId, isActive }: { clientId: string; isActive: boolean }) =>
+      setClientActiveRequest(clientId, isActive),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "clients"] });
+    },
+  });
+}
+
+export function useReconciliation(employeeId: string | null, range: PayrollDateRange) {
+  return useQuery({
+    queryKey: ["admin", "employees", employeeId, "reconciliation", range],
+    queryFn: () => getReconciliationRequest(employeeId as string, range),
+    enabled: employeeId !== null,
+  });
+}
+
+function invalidateReconciliationAndPayroll(
+  queryClient: ReturnType<typeof useQueryClient>,
+  employeeId: string,
+) {
+  queryClient.invalidateQueries({ queryKey: ["admin", "employees", employeeId, "reconciliation"] });
+  queryClient.invalidateQueries({ queryKey: ["admin", "employees", employeeId, "payroll"] });
+}
+
+export function useCreateReconciliation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ employeeId, range }: { employeeId: string; range: PayrollDateRange }) =>
+      createReconciliationRequest(employeeId, range),
+    onSuccess: (_reconciliation, variables) => {
+      invalidateReconciliationAndPayroll(queryClient, variables.employeeId);
+    },
+  });
+}
+
+export function useSubmitClientFigures() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      reconciliationId,
+      figures,
+    }: {
+      employeeId: string;
+      reconciliationId: string;
+      figures: DurationBreakdown;
+    }) => submitClientFiguresRequest(reconciliationId, figures),
+    onSuccess: (_reconciliation, variables) => {
+      invalidateReconciliationAndPayroll(queryClient, variables.employeeId);
+    },
+  });
+}
+
+export function useResolveReconciliation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      reconciliationId,
+      input,
+    }: {
+      employeeId: string;
+      reconciliationId: string;
+      input: DurationBreakdown & { reason: string };
+    }) => resolveReconciliationRequest(reconciliationId, input),
+    onSuccess: (_reconciliation, variables) => {
+      invalidateReconciliationAndPayroll(queryClient, variables.employeeId);
     },
   });
 }
