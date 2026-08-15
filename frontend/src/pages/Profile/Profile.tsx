@@ -66,7 +66,11 @@ export function Profile() {
             <h2 className="truncate text-lg font-semibold text-ink">
               {user.fullName}
             </h2>
-            <p className="truncate text-sm text-ink-soft">{user.jobTitle}</p>
+            <p className="truncate text-sm text-ink-soft">
+              {user.clientName
+                ? `${user.jobTitle} - ${user.clientName}`
+                : user.jobTitle}
+            </p>
           </div>
           <span
             className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
@@ -101,7 +105,7 @@ export function Profile() {
               Current Rate
             </p>
             <p className="mt-1 text-sm font-medium text-ink">
-              {`$ ${(user.hourlyRateCents/100).toFixed(2)}/hour`}
+              {`$ ${user.hourlyRateCents.toFixed(2)}/hour`}
             </p>
           </div>
         </div>

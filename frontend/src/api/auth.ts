@@ -4,7 +4,7 @@ import type { AuthResponse, GoogleAuthResponse, User } from "@/types/auth";
 export interface RegisterPayload {
   firstName: string;
   lastName: string;
-  jobTitle: string;
+  jobId: string;
   email: string;
   password: string;
   confirmPassword: string;
@@ -45,7 +45,7 @@ export interface GoogleAuthPayload {
 
 export interface CompleteGoogleSignupPayload {
   pendingToken: string;
-  jobTitle: string;
+  jobId: string;
 }
 
 export async function registerRequest(payload: RegisterPayload): Promise<{ message: string }> {
