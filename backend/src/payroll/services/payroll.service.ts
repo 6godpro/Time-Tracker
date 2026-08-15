@@ -6,6 +6,9 @@ type PayrollPaymentRecord = {
   periodFrom: Date;
   periodTo: Date;
   hourlyRateCents: number;
+  regularDurationMs: number;
+  overtimeDurationMs: number;
+  compensatedBreakDurationMs: number;
   workedDurationMs: number;
   grossPayCents: number;
   paidAt: Date;
@@ -18,6 +21,9 @@ function serializePayment(payment: PayrollPaymentRecord) {
     periodFrom: payment.periodFrom,
     periodTo: payment.periodTo,
     hourlyRateCents: payment.hourlyRateCents,
+    regularDurationMs: payment.regularDurationMs,
+    overtimeDurationMs: payment.overtimeDurationMs,
+    compensatedBreakDurationMs: payment.compensatedBreakDurationMs,
     workedDurationMs: payment.workedDurationMs,
     grossPayCents: payment.grossPayCents,
     paidAt: payment.paidAt,
