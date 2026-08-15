@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { JOB_TITLES } from "../../constants/jobTitles";
 
 export const registerSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required").max(50),
