@@ -51,6 +51,7 @@ type PublicUserSource = {
   emailVerified: boolean;
   createdAt: Date;
   currentJob: { id: string; name: string };
+  client: { name: string } | null;
   hourlyRateCents: number;
 };
 
@@ -67,10 +68,11 @@ function toPublicUser(user: PublicUserSource) {
     jobTitle: user.currentJob.name,
     emailVerified: user.emailVerified,
     hourlyRateCents: user.hourlyRateCents,
+    clientName: user.client?.name,
   };
 }
 
-const userWithJobInclude = { currentJob: true };
+const Inclusion = { currentJob: true, client: true };
 
 async function getActiveJobOrThrow(jobId: string) {
   const job = await prisma.job.findUnique({ where: { id: jobId } });
@@ -142,7 +144,7 @@ export async function registerUser(
 export async function loginUser(input: LoginInput) {
   const user = await prisma.user.findUnique({
     where: { email: input.email },
-    include: userWithJobInclude,
+    include: Inclusion,
   });
 
   if (!user) {
@@ -179,7 +181,7 @@ export async function loginUser(input: LoginInput) {
 export async function getCurrentUser(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: userWithJobInclude,
+    include: Inclusion,
   });
 
   if (!user) {
@@ -368,13 +370,13 @@ async function linkOrReuseGoogleAccount(
   if (existing.googleId) {
     return prisma.user.findUniqueOrThrow({
       where: { id: existing.id },
-      include: userWithJobInclude,
+      include: Inclusion,
     });
   }
   return prisma.user.update({
     where: { id: existing.id },
     data: { googleId, emailVerified: true },
-    include: userWithJobInclude,
+    include: Inclusion,
   });
 }
 
@@ -444,7 +446,7 @@ export async function completeGoogleSignup(
       emailVerified: true,
       password: null,
     },
-    include: userWithJobInclude,
+    include: Inclusion,
   });
 
   const token = signAccessToken({ userId: user.id });
