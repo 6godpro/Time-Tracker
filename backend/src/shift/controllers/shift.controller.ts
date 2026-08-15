@@ -3,14 +3,12 @@ import {
   clockIn,
   clockOut,
   createShiftEditRequest,
-  extendShift,
   getCurrentShift,
   getShiftHistory,
   getUnresolvedAutoClosedShifts,
 } from "../services/shift.service";
 import {
   createShiftEditRequestSchema,
-  extendShiftSchema,
 } from "../validators/shift.validators";
 
 export async function clockInHandler(req: Request, res: Response) {
@@ -50,10 +48,4 @@ export async function createShiftEditRequestHandler(
 export async function pendingCorrectionsHandler(req: Request, res: Response) {
   const shifts = await getUnresolvedAutoClosedShifts(req.userId as string);
   res.status(200).json({ shifts });
-}
-
-export async function extendShiftHandler(req: Request, res: Response) {
-  const input = extendShiftSchema.parse(req.body);
-  const shift = await extendShift(req.userId as string, input.note);
-  res.status(200).json({ shift });
 }

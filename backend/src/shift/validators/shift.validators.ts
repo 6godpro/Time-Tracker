@@ -12,13 +12,3 @@ export const createShiftEditRequestSchema = z.object({
 });
 
 export type CreateShiftEditRequestInput = z.infer<typeof createShiftEditRequestSchema>;
-
-export const extendShiftSchema = z.object({
-  note: z
-    .string()
-    .trim()
-    .min(1, "Let us know why you need more time")
-    .max(500, "Keep it under 500 characters"),
-});
-
-export type ExtendShiftInput = z.infer<typeof extendShiftSchema>;

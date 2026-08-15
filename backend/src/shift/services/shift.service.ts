@@ -1,11 +1,9 @@
-import { prisma } from "@/config/prisma";
-import { createShiftEditRequestSubmittedNotification } from "@/notification/services/notification.service";
-import { AppError } from "@/utils/AppError";
-import { fullName } from "@/utils/name";
+import { prisma } from "../../config/prisma";
+import { AppError } from "../../utils/AppError";
+import { fullName } from "../../utils/name";
+import { createShiftEditRequestSubmittedNotification } from "../../notification/services/notification.service";
 
-export const MAX_SHIFT_DURATION_MS = 8 * 60 * 60 * 1000;
-export const EXTEND_WINDOW_START_MS = 8 * 60 * 60 * 1000;
-export const EXTENSION_DURATION_MS = 2 * 60 * 60 * 1000;
+export const BREAK_ALLOWANCE_MS = 60 * 60 * 1000;
 
 type editRequestType = {
   id: string;
@@ -25,9 +23,9 @@ export type shiftType = {
   status: string;
   autoClosed: boolean;
   needsReview: boolean;
-  extendedCutoffAt: Date | null;
-  extensionNote: string | null;
-  extendedAt: Date | null;
+  jobId: string;
+
+  minimumWorkMinutesAtClockIn: number;
   breaks: { id: string; startTime: Date; endTime: Date | null }[];
   editRequests: editRequestType[];
 };
@@ -37,7 +35,7 @@ const shiftInclude = {
   editRequests: { orderBy: { createdAt: "desc" as const } },
 };
 
-function sumBreakMs(
+export function sumBreakMs(
   breaks: { startTime: Date; endTime: Date | null }[],
   now: Date,
 ): number {
@@ -49,11 +47,10 @@ function sumBreakMs(
 
 function effectiveAutoCloseAt(shift: {
   clockIn: Date;
-  extendedCutoffAt: Date | null;
+  minimumWorkMinutesAtClockIn: number;
 }): Date {
-  return (
-    shift.extendedCutoffAt ??
-    new Date(shift.clockIn.getTime() + MAX_SHIFT_DURATION_MS)
+  return new Date(
+    shift.clockIn.getTime() + shift.minimumWorkMinutesAtClockIn * 60_000,
   );
 }
 
@@ -61,7 +58,7 @@ function serializeShift(shift: shiftType, now: Date = new Date()) {
   const breakMs = sumBreakMs(shift.breaks, now);
   const shiftEnd = shift.clockOut ?? now;
   const totalMs = shiftEnd.getTime() - shift.clockIn.getTime();
-  const workedMs = Math.max(totalMs, 0);
+  const workedMs = Math.max(totalMs - breakMs, 0);
 
   const activeBreak = shift.breaks.find((brk) => brk.endTime === null) ?? null;
 
@@ -73,15 +70,14 @@ function serializeShift(shift: shiftType, now: Date = new Date()) {
     status: shift.status,
     autoClosed: shift.autoClosed,
     needsReview: shift.needsReview,
+    jobId: shift.jobId,
+    minimumWorkMinutesAtClockIn: shift.minimumWorkMinutesAtClockIn,
 
     autoCloseAt: effectiveAutoCloseAt(shift),
-    extendWindowStartsAt: new Date(
-      shift.clockIn.getTime() + EXTEND_WINDOW_START_MS,
-    ),
-    extendedCutoffAt: shift.extendedCutoffAt,
-    extensionNote: shift.extensionNote,
-    extendedAt: shift.extendedAt,
     breakDurationMs: breakMs,
+
+    breakAllowanceMs: BREAK_ALLOWANCE_MS,
+    breakRemainingMs: Math.max(BREAK_ALLOWANCE_MS - breakMs, 0),
     workedDurationMs: workedMs,
     activeBreak: activeBreak
       ? { id: activeBreak.id, startTime: activeBreak.startTime }
@@ -103,7 +99,6 @@ async function autoCloseIfExpired(shift: shiftType): Promise<boolean> {
       where: { shiftId: shift.id, endTime: null },
       data: { endTime: cutoff },
     }),
-
     prisma.shift.update({
       where: { id: shift.id },
       data: {
@@ -114,6 +109,50 @@ async function autoCloseIfExpired(shift: shiftType): Promise<boolean> {
       },
     }),
   ]);
+
+  return true;
+}
+
+async function autoEndBreakIfExpired(
+  shift: shiftType,
+  now: Date = new Date(),
+): Promise<boolean> {
+  if (shift.status !== "ON_BREAK") {
+    return false;
+  }
+
+  const activeBreak = shift.breaks.find((brk) => brk.endTime === null);
+
+  if (!activeBreak) {
+    return false;
+  }
+
+  const priorBreakMs = sumBreakMs(
+    shift.breaks.filter((brk) => brk.id !== activeBreak.id),
+    now,
+  );
+  const remainingAllowanceMs = Math.max(BREAK_ALLOWANCE_MS - priorBreakMs, 0);
+  const cutoff = new Date(
+    activeBreak.startTime.getTime() + remainingAllowanceMs,
+  );
+
+  if (cutoff.getTime() > now.getTime()) {
+    return false;
+  }
+
+  await prisma.$transaction([
+    prisma.break.update({
+      where: { id: activeBreak.id },
+      data: { endTime: cutoff },
+    }),
+    prisma.shift.update({
+      where: { id: shift.id },
+      data: { status: "WORKING" },
+    }),
+  ]);
+
+  shift.status = "WORKING";
+  activeBreak.endTime = cutoff;
 
   return true;
 }
@@ -130,7 +169,13 @@ async function findActiveShift(userId: string): Promise<shiftType | null> {
 
   const wasAutoClosed = await autoCloseIfExpired(active);
 
-  return wasAutoClosed ? null : active;
+  if (wasAutoClosed) {
+    return null;
+  }
+
+  await autoEndBreakIfExpired(active);
+
+  return active;
 }
 
 export async function getUnresolvedAutoClosedShifts(userId: string) {
@@ -164,8 +209,22 @@ export async function clockIn(userId: string) {
     );
   }
 
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: {
+      currentJobId: true,
+      currentJob: { select: { minimumWorkMinutes: true } },
+    },
+  });
+
   const shift = await prisma.shift.create({
-    data: { userId, status: "WORKING" },
+    data: {
+      userId,
+      status: "WORKING",
+      clockIn: new Date(),
+      jobId: user.currentJobId,
+      minimumWorkMinutesAtClockIn: user.currentJob.minimumWorkMinutes,
+    },
     include: shiftInclude,
   });
 
@@ -253,69 +312,6 @@ export async function getActiveShiftOrThrow(userId: string) {
   }
 
   return active;
-}
-
-export async function extendShift(userId: string, note: string) {
-  const shift = await prisma.shift.findFirst({
-    where: { userId, status: { in: ["WORKING", "ON_BREAK"] } },
-  });
-
-  if (!shift) {
-    throw new AppError("You don't have an active shift to extend.", 409);
-  }
-
-  const currentCutoff = effectiveAutoCloseAt(shift);
-
-  if (currentCutoff.getTime() <= Date.now()) {
-    await prisma.break.updateMany({
-      where: { shiftId: shift.id, endTime: null },
-      data: { endTime: currentCutoff },
-    });
-
-    await prisma.shift.update({
-      where: { id: shift.id },
-      data: {
-        status: "COMPLETED",
-        clockOut: currentCutoff,
-        autoClosed: true,
-        needsReview: true,
-      },
-    });
-
-    throw new AppError(
-      "This shift already reached its maximum duration and was closed automatically. Submit a correction request instead.",
-      409,
-    );
-  }
-
-  if (shift.extendedCutoffAt) {
-    throw new AppError("This shift has already been extended once.", 409);
-  }
-
-  const extendWindowStartsAt = new Date(
-    shift.clockIn.getTime() + EXTEND_WINDOW_START_MS,
-  );
-
-  if (Date.now() < extendWindowStartsAt.getTime()) {
-    throw new AppError(
-      "Extend isn't available yet — it opens once this shift has been active for 8 hours.",
-      409,
-    );
-  }
-
-  const updated = await prisma.shift.update({
-    where: { id: shift.id },
-    data: {
-      extendedCutoffAt: new Date(
-        shift.clockIn.getTime() + MAX_SHIFT_DURATION_MS + EXTENSION_DURATION_MS,
-      ),
-      extensionNote: note,
-      extendedAt: new Date(),
-    },
-    include: shiftInclude,
-  });
-
-  return serializeShift(updated);
 }
 
 export async function createShiftEditRequest(

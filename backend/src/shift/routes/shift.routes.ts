@@ -4,7 +4,6 @@ import {
   clockOutHandler,
   createShiftEditRequestHandler,
   currentShiftHandler,
-  extendShiftHandler,
   historyHandler,
   pendingCorrectionsHandler,
 } from "../controllers/shift.controller";
@@ -20,7 +19,6 @@ router.post("/clock-out", asyncHandler(clockOutHandler));
 router.get("/current", asyncHandler(currentShiftHandler));
 router.get("/history", asyncHandler(historyHandler));
 router.get("/pending-corrections", asyncHandler(pendingCorrectionsHandler));
-router.post("/extend", asyncHandler(extendShiftHandler));
 router.post(
   "/:shiftId/edit-requests",
   asyncHandler(createShiftEditRequestHandler),
