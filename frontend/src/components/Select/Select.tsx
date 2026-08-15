@@ -1,15 +1,24 @@
 import { forwardRef } from "react";
 import * as RadixSelect from "@radix-ui/react-select";
 
+export interface SelectOption {
+  value: string;
+  label: string;
+}
+
 interface SelectProps {
   id?: string;
   name?: string;
   value: string;
   onChange: (value: string) => void;
   onBlur?: () => void;
-  options: readonly string[];
+  options: readonly string[] | readonly SelectOption[];
   placeholder?: string;
   hasError?: boolean;
+}
+
+function normalizeOptions(options: readonly string[] | readonly SelectOption[]): SelectOption[] {
+  return options.map((option) => (typeof option === "string" ? { value: option, label: option } : option));
 }
 
 export const Select = forwardRef<HTMLButtonElement, SelectProps>(
@@ -26,6 +35,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
     },
     ref,
   ) => {
+    const normalizedOptions = normalizeOptions(options)
     return (
       <RadixSelect.Root
         name={name}
@@ -68,13 +78,13 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
               ▲
             </RadixSelect.ScrollUpButton>
             <RadixSelect.Viewport className="p-1">
-              {options.map((option) => (
+              {normalizedOptions.map((option) => (
                 <RadixSelect.Item
-                  key={option}
-                  value={option}
+                  key={option.value}
+                  value={option.value}
                   className="cursor-pointer select-none rounded-lg px-3 py-2 text-sm text-ink outline-none data-highlighted:bg-surface data-[state=checked]:bg-status-idle-bg data-[state=checked]:font-medium"
                 >
-                  <RadixSelect.ItemText>{option}</RadixSelect.ItemText>
+                  <RadixSelect.ItemText>{option.label}</RadixSelect.ItemText>
                 </RadixSelect.Item>
               ))}
             </RadixSelect.Viewport>
