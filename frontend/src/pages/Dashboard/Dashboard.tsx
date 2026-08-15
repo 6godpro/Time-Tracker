@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { useState } from "react";
 import { AppLayout } from "@/layouts/AppLayout";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -10,19 +10,18 @@ import {
   useClockIn,
   useClockOut,
   useCurrentShift,
-  useExtendShift,
   usePendingCorrections,
 } from "@/hooks/useShift";
 import { useEndBreak, useStartBreak } from "@/hooks/useBreak";
 import { useTick } from "@/hooks/useElapsedTime";
 import { useAuthStore } from "@/store/authStore";
 import { extractErrorMessage } from "@/api/client";
-import { formatDate, formatDuration, formatFullDate, formatTime } from "@/utils/format";
-import type { Shift } from "@/types/shift";
-
-function elapsedMs(fromIso: string, now: Date): number {
-  return now.getTime() - new Date(fromIso).getTime();
-}
+import {
+  formatDate,
+  formatDuration,
+  formatFullDate,
+  formatTime,
+} from "@/utils/format";
 
 function PendingCorrectionGate() {
   const { data: pendingShifts } = usePendingCorrections();
@@ -39,8 +38,10 @@ function PendingCorrectionGate() {
       open
       onOpenChange={() => {}}
       title="This shift needs a quick note"
-      description={`Closed automatically on ${formatDate(shift.clockIn)} after being open too long. Add the real clock-out time before clocking in again.${
-        remaining > 0 ? ` (${remaining} more shift${remaining === 1 ? "" : "s"} after this one.)` : ""
+      description={`Closed automatically on ${formatDate(shift.clockIn)} — every shift ends at your job's minimum hours unless you clock out first, so this just needs the real clock-out time before you can clock in again.${
+        remaining > 0
+          ? ` (${remaining} more shift${remaining === 1 ? "" : "s"} after this one.)`
+          : ""
       }`}
       showCloseButton={false}
     >
@@ -49,98 +50,12 @@ function PendingCorrectionGate() {
   );
 }
 
-function ExtendShiftPrompt({ shift }: { shift: Shift }) {
-  const [isExtending, setIsExtending] = useState(false);
-  const [note, setNote] = useState("");
-  const extendShift = useExtendShift();
-
-  const handleSubmit = (event: FormEvent) => {
-    event.preventDefault();
-    extendShift.mutate(
-      { note },
-      {
-        onSuccess: () => {
-          setIsExtending(false);
-          setNote("");
-        },
-      },
-    );
-  };
-
-  return (
-    <div className="mt-6 w-full rounded-xl bg-status-break-bg px-4 py-3 text-left text-xs text-status-break sm:max-w-xs">
-      <p>
-        You&apos;ve been clocked in for over 8 hours. This shift auto-closes at{" "}
-        <span className="font-medium">{formatTime(shift.autoCloseAt)}</span> unless you extend it.
-      </p>
-
-      {isExtending ? (
-        <form onSubmit={handleSubmit} className="mt-3 space-y-2.5">
-          <div>
-            <label htmlFor="extend-note" className="mb-1 block font-medium text-ink">
-              Why do you need more time?
-            </label>
-            <textarea
-              id="extend-note"
-              required
-              rows={2}
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="e.g. Covering an extra shift tonight"
-              className="w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
-            />
-          </div>
-
-          {extendShift.isError ? (
-            <p className="rounded-lg bg-danger-bg px-2.5 py-2 text-danger">
-              {extractErrorMessage(extendShift.error)}
-            </p>
-          ) : null}
-
-          <div className="flex gap-2">
-            <Button type="submit" className="px-3! py-2! text-xs" isLoading={extendShift.isPending}>
-              Extend by 2 hours
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="px-3! py-2! text-xs"
-              onClick={() => setIsExtending(false)}
-            >
-              Cancel
-            </Button>
-          </div>
-        </form>
-      ) : (
-        <Button
-          type="button"
-          variant="secondary"
-          className="mt-2 px-3! py-2! text-xs"
-          onClick={() => setIsExtending(true)}
-        >
-          Extend shift
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function ExtendedNotice({ shift }: { shift: Shift }) {
-  return (
-    <p className="mt-6 w-full rounded-xl bg-status-idle-bg px-4 py-3 text-left text-xs text-ink-soft sm:max-w-xs">
-      Extended — this shift will auto-close at{" "}
-      <span className="font-medium text-ink">{formatTime(shift.autoCloseAt)}</span> if you don&apos;t clock out
-      first.
-    </p>
-  );
-}
-
 export function Dashboard() {
   useTick();
   const now = new Date();
   const user = useAuthStore((s) => s.user);
 
-  const { data: shift, isLoading } = useCurrentShift();
+  const { data: shift, isLoading, dataUpdatedAt } = useCurrentShift();
   const clockIn = useClockIn();
   const clockOut = useClockOut();
   const startBreak = useStartBreak();
@@ -169,25 +84,23 @@ export function Dashboard() {
 
   const status = shift?.status ?? "NOT_WORKING";
 
+  const clientElapsedSinceFetchMs = shift ? Math.max(now.getTime() - dataUpdatedAt, 0) : 0;
+
   const workedMs = shift
     ? shift.status === "WORKING"
-      ? elapsedMs(shift.clockIn, now) - shift.breakDurationMs
+      ? shift.workedDurationMs + clientElapsedSinceFetchMs
       : shift.workedDurationMs
     : 0;
 
   const liveBreakMs = shift
     ? shift.activeBreak
-      ? shift.breakDurationMs +
-        (now.getTime() - new Date(shift.activeBreak.startTime).getTime())
+      ? shift.breakDurationMs + clientElapsedSinceFetchMs
       : shift.breakDurationMs
     : 0;
 
-  const canExtend = Boolean(
-    shift &&
-      !shift.extendedCutoffAt &&
-      now.getTime() >= new Date(shift.extendWindowStartsAt).getTime() &&
-      now.getTime() < new Date(shift.autoCloseAt).getTime(),
-  );
+  const liveBreakRemainingMs = shift
+    ? Math.max(shift.breakAllowanceMs - liveBreakMs, 0)
+    : 0;
 
   return (
     <AppLayout>
@@ -242,15 +155,30 @@ export function Dashboard() {
                 <span className="font-medium text-ink">
                   {formatTime(shift.activeBreak.startTime)}
                 </span>
+                <br />
+                {liveBreakRemainingMs > 0 ? (
+                  <>
+                    <span className="font-medium text-ink">
+                      {formatDuration(liveBreakRemainingMs)}
+                    </span>{" "}
+                    of your hour left — the shift resumes automatically once it
+                    runs out.
+                  </>
+                ) : (
+                  "Your hour is up — resuming any moment."
+                )}
               </div>
             ) : null}
 
-            {shift ? (
-              shift.extendedCutoffAt ? (
-                <ExtendedNotice shift={shift} />
-              ) : canExtend ? (
-                <ExtendShiftPrompt shift={shift} />
-              ) : null
+            {shift && shift.status !== "COMPLETED" ? (
+              <p className="mt-4 w-full text-xs text-ink-soft sm:max-w-xs">
+                This shift closes automatically at{" "}
+                <span className="font-medium text-ink">
+                  {formatTime(shift.autoCloseAt)}
+                </span>{" "}
+                unless you clock out first — if you're still working past that,
+                add the real clock-out time on your next login.
+              </p>
             ) : null}
 
             {actionError ? (

@@ -7,8 +7,8 @@ import { AuthLayout } from "@/layouts/AuthLayout";
 import { Button } from "@/components/Button";
 import { GoogleAuthButton, isGoogleAuthConfigured } from "@/components/GoogleAuthButton";
 import { useRegister } from "@/hooks/useAuth";
+import { useActiveJobs } from "@/hooks/useJobs";
 import { extractErrorMessage } from "@/api/client";
-import { JOB_TITLES } from "@/constants/jobTitles";
 import { Select } from "@/components/Select";
 
 const registerSchema = z
@@ -19,9 +19,7 @@ const registerSchema = z
       .string()
       .min(1, "Email is required")
       .email("Enter a valid email address"),
-    jobTitle: z.enum(JOB_TITLES, {
-      errorMap: () => ({ message: "Select a job title" }),
-    }),
+    jobId: z.string().min(1, "Select a job"),
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string().min(1, "Please confirm your password"),
   })
@@ -41,6 +39,11 @@ export function Register() {
   } = useForm<RegisterForm>({ resolver: zodResolver(registerSchema) });
 
   const registerUser = useRegister();
+  const { data: jobs, isLoading: isLoadingJobs } = useActiveJobs();
+  // Registration no longer logs the user in — the account is created
+  // unverified and can't be used until the emailed link is clicked. Set
+  // once on success and never cleared, so this is a dead-end confirmation
+  // screen rather than something that can flip back to the form.
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
 
   const textFields = [
@@ -136,26 +139,26 @@ export function Register() {
 
         <div>
           <Controller
-            name="jobTitle"
+            name="jobId"
             control={control}
             defaultValue={undefined}
             render={({ field }) => (
               <Select
                 ref={field.ref}
-                id="jobTitle"
+                id="jobId"
                 name={field.name}
                 value={field.value ?? ""}
                 onChange={field.onChange}
                 onBlur={field.onBlur}
-                options={JOB_TITLES}
-                placeholder="Select a job title"
-                hasError={Boolean(errors.jobTitle)}
+                options={(jobs ?? []).map((job) => ({ value: job.id, label: job.name }))}
+                placeholder={isLoadingJobs ? "Loading jobs…" : "Select a job title"}
+                hasError={Boolean(errors.jobId)}
               />
             )}
           />
-          {errors.jobTitle ? (
+          {errors.jobId ? (
             <p className="mt-1 text-xs text-danger">
-              {errors.jobTitle.message}
+              {errors.jobId.message}
             </p>
           ) : null}
         </div>
