@@ -38,12 +38,3 @@ export async function pendingCorrectionsRequest(): Promise<Shift[]> {
   const { data } = await apiClient.get<{ shifts: Shift[] }>("/shift/pending-corrections");
   return data.shifts;
 }
-
-export interface ExtendShiftPayload {
-  note: string;
-}
-
-export async function extendShiftRequest(payload: ExtendShiftPayload): Promise<Shift> {
-  const { data } = await apiClient.post<{ shift: Shift }>("/shift/extend", payload);
-  return data.shift;
-}
