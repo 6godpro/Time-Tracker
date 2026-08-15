@@ -16,6 +16,7 @@ export const env = {
   jwtSecret: required("JWT_SECRET"),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
   corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
+  businessTimeZone: process.env.BUSINESS_TIMEZONE ?? "UTC",
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
   googleClientId: process.env.GOOGLE_CLIENT_ID,
   smtp: {
