@@ -9,7 +9,14 @@ export const IDLE_WARNING_MS = 60 * 1000; // 60 seconds
 const LAST_ACTIVITY_KEY = "time_tracker_last_activity";
 const TOKEN_KEY = "time_tracker_token";
 
-const ACTIVITY_EVENTS = ["mousedown", "keydown"] as const;
+const ACTIVITY_EVENTS = [
+  "mousemove",
+  "mousedown",
+  "keydown",
+  "scroll",
+  "touchstart",
+] as const;
+
 const ACTIVITY_WRITE_THROTTLE_MS = 5 * 1000;
 
 function readLastActivity(): number {
@@ -28,7 +35,14 @@ export function useIdleTimeout() {
   const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
   const lastWriteRef = useRef(0);
 
+  const secondsRemainingRef = useRef<number | null>(null);
+  useEffect(() => {
+    secondsRemainingRef.current = secondsRemaining;
+  }, [secondsRemaining]);
+
   const recordActivity = useCallback(() => {
+    if (secondsRemainingRef.current !== null) return;
+
     const now = Date.now();
     if (now - lastWriteRef.current < ACTIVITY_WRITE_THROTTLE_MS) return;
     lastWriteRef.current = now;
@@ -45,8 +59,16 @@ export function useIdleTimeout() {
   useEffect(() => {
     if (!hasSession) return;
 
-    localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
-    lastWriteRef.current = Date.now();
+    const now = Date.now();
+    const priorActivity = localStorage.getItem(LAST_ACTIVITY_KEY);
+
+    if (priorActivity && now - Number(priorActivity) >= IDLE_TIMEOUT_MS) {
+      logoutRef.current();
+      return;
+    }
+
+    localStorage.setItem(LAST_ACTIVITY_KEY, String(now));
+    lastWriteRef.current = now;
 
     ACTIVITY_EVENTS.forEach((eventName) =>
       window.addEventListener(eventName, recordActivity),
