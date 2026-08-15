@@ -5,6 +5,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { Loader } from "@/components/Loader";
 import { IdleWarningModal } from "@/components/IdleWarningModal";
 import { useIdleTimeout } from "@/hooks/useIdleTimeout";
+import { useLogout } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: () => {
@@ -21,6 +22,7 @@ function AuthenticatedLayout() {
   const clearSession = useAuthStore((s) => s.clearSession);
   const navigate = useNavigate();
   const { showWarning, secondsRemaining, stayActive } = useIdleTimeout();
+  const logout = useLogout();
 
   useEffect(() => {
     if (user) setUser(user);
@@ -44,7 +46,7 @@ function AuthenticatedLayout() {
   return (
     <>
       <Outlet />
-      <IdleWarningModal open={showWarning} secondsRemaining={secondsRemaining} onStayActive={stayActive} />
+      <IdleWarningModal open={showWarning} secondsRemaining={secondsRemaining} onStayActive={stayActive} logout={logout} />
     </>
   );
 }
