@@ -54,7 +54,7 @@ FROM (VALUES
   ('Cold Caller', 240),
   ('Customer Care Representative', 480),
   ('DevOps Engineer', 480),
-  ('Telemarketer', 480)
+  ('Telemarketer', 120)
 ) AS v(name, minutes)
 WHERE NOT EXISTS (SELECT 1 FROM "jobs" WHERE "jobs"."name" = v.name);
 
