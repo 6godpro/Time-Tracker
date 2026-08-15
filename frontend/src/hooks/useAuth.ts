@@ -52,10 +52,10 @@ export function useLogout() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  return () => {
+  return async () => {
     clearSession();
+    await navigate({ to: "/login" });
     queryClient.clear();
-    navigate({ to: "/login" });
   };
 }
 

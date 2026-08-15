@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { User } from "@/types/auth";
 
 const TOKEN_KEY = "time_tracker_token";
+const LAST_ACTIVITY_KEY = "time_tracker_last_activity";
 
 interface AuthState {
   token: string | null;
@@ -23,6 +24,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   setUser: (user) => set({ user, isHydrated: true }),
   clearSession: () => {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(LAST_ACTIVITY_KEY)
     set({ token: null, user: null, isHydrated: true });
   },
 }));

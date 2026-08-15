@@ -5,12 +5,14 @@ export interface User {
   firstName: string;
   lastName: string;
   fullName: string;
+  jobId: string;
   jobTitle: string;
   email: string;
   role: Role;
   emailVerified: boolean;
   createdAt: string;
   hourlyRateCents: number;
+  clientName: string;
 }
 
 export interface AuthResponse {
